@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { GOOGLE_APPS_SCRIPT_TEMPLATE, SHEETS_ARCHITECTURE_OPTIONS, exportInventoryToCSV } from '../data/sheetsIntegration';
 import { MaterialItem, MonthlyFactor } from '../types';
-import { syncWithGoogleSheets } from '../services/sheetsSync';
+import { syncWithGoogleSheets, DEFAULT_WEBHOOK_URL } from '../services/sheetsSync';
 import confetti from 'canvas-confetti';
 
 interface SheetsIntegrationViewProps {
@@ -38,7 +38,7 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedFormulas, setCopiedFormulas] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState(() => {
-    return localStorage.getItem('sugestion_webhook_url') || '';
+    return localStorage.getItem('sugestion_webhook_url') || DEFAULT_WEBHOOK_URL;
   });
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);

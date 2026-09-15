@@ -125,8 +125,7 @@ function readStockSheet() {
       stockMinimo: Number(row[6] || 0),
       stockMaximo: Number(row[7] || 0),
       estado: row[8],
-      bultosAPedir: Number(row[9] || 0),
-      proveedor: row[10] || ""
+      bultosAPedir: Number(row[9] || 0)
     });
   }
   return { items: items, updated: new Date().toISOString() };
@@ -140,11 +139,11 @@ function updateStockSheet(items, metadata) {
   }
   
   // Headers
-  sheet.getRange("A1:L1").setValues([[
+  sheet.getRange("A1:K1").setValues([[
     "ID", "Categoría", "Material", "Bultos", "Unidades x Bulto", 
-    "Total Unidades", "Stock Mínimo", "Stock Máximo", "Estado", "Unidades a Pedir", "Proveedor", "Fecha Actualización"
+    "Total Unidades", "Stock Mínimo", "Stock Máximo", "Estado", "Unidades a Pedir", "Fecha Actualización"
   ]]);
-  sheet.getRange("A1:L1").setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
+  sheet.getRange("A1:K1").setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
 
   const rows = items.map(function(item) {
     return [
@@ -158,13 +157,12 @@ function updateStockSheet(items, metadata) {
       item.maxStockAdjusted,
       item.status,
       item.unitsToOrder || 0,
-      item.provider,
       new Date().toLocaleDateString("es-AR")
     ];
   });
 
   if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 12).setValues(rows);
+    sheet.getRange(2, 1, rows.length, 11).setValues(rows);
   }
   
   // Historial sheet
@@ -249,7 +247,6 @@ export function exportInventoryToCSV(items: any[], monthName: string, responsibl
     'Estado',
     'Unidades a Pedir',
     'Bultos a Pedir',
-    'Proveedor',
     'Notas / Alerta'
   ];
 
@@ -264,7 +261,6 @@ export function exportInventoryToCSV(items: any[], monthName: string, responsibl
     `"${item.status}"`,
     item.unitsToOrder,
     item.bultosToOrder,
-    `"${item.provider}"`,
     `"${(item.notes || '').replace(/"/g, '""')}"`
   ]);
 

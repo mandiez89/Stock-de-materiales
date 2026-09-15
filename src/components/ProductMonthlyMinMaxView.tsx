@@ -296,7 +296,6 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
                   Stock Máximo ({monthlyFactors[selectedMonth - 1]?.shortName})
                 </th>
                 <th className="py-3 px-4 text-right text-slate-400">Base Histórica</th>
-                <th className="py-3 px-4 text-left">Proveedor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -362,11 +361,6 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
                     {/* Base values */}
                     <td className="py-2.5 px-4 text-right font-mono text-[11px] text-slate-400">
                       {item.minStockBase.toLocaleString('es-AR')} / {item.maxStockBase.toLocaleString('es-AR')}
-                    </td>
-
-                    {/* Provider */}
-                    <td className="py-2.5 px-4 text-slate-500 text-[11px] truncate max-w-[140px]">
-                      {item.provider}
                     </td>
                   </tr>
                 );

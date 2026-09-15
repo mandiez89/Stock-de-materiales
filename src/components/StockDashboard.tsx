@@ -7,7 +7,6 @@ import {
   Search, 
   ShoppingBag, 
   Layers, 
-  Truck,
   Plus,
   Minus
 } from 'lucide-react';
@@ -52,8 +51,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
       // Search
       const matchesSearch =
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.provider.toLowerCase().includes(searchQuery.toLowerCase());
+        item.category.toLowerCase().includes(searchQuery.toLowerCase());
 
       // Category
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
@@ -64,21 +62,6 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
       return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [items, searchQuery, selectedCategory, selectedStatus]);
-
-  // Provider summary
-  const providerSummary = useMemo<Record<string, { units: number; itemsCount: number }>>(() => {
-    const summary: Record<string, { units: number; itemsCount: number }> = {};
-    items.forEach((item) => {
-      if (item.unitsToOrder > 0) {
-        if (!summary[item.provider]) {
-          summary[item.provider] = { units: 0, itemsCount: 0 };
-        }
-        summary[item.provider].units += item.unitsToOrder;
-        summary[item.provider].itemsCount += 1;
-      }
-    });
-    return summary;
-  }, [items]);
 
   const categories: { label: string; value: string; count: number }[] = [
     { label: 'Todas las Categorías', value: 'all', count: totalCount },
@@ -230,50 +213,6 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
         </div>
       </div>
 
-      {/* Provider Quick Breakdown */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2">
-            <Truck className="w-4 h-4 text-slate-500" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Cantidades Totales a Pedir por Proveedor ({selectedMonth.name})
-            </h4>
-          </div>
-          <span className="text-xs text-slate-400">
-            Factor de demanda: <strong>{selectedMonth.factor}x</strong> ({selectedMonth.seasonName})
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {Object.entries(providerSummary).length === 0 ? (
-            <div className="col-span-3 text-center py-4 text-xs text-slate-400">
-              No hay pedidos requeridos para este período.
-            </div>
-          ) : (
-            (Object.entries(providerSummary) as [string, { units: number; itemsCount: number }][]).map(([providerName, data]) => (
-              <div
-                key={providerName}
-                onClick={onOpenPurchaseOrder}
-                className="p-3 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-300 rounded-lg transition-all cursor-pointer"
-              >
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-800 truncate">{providerName}</span>
-                  <span className="text-[10px] bg-indigo-100 text-indigo-800 font-semibold px-1.5 py-0.2 rounded">
-                    {data.itemsCount} ítems
-                  </span>
-                </div>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-[11px] text-slate-500">Volumen Requerido:</span>
-                  <span className="font-mono font-bold text-indigo-700 text-sm">
-                    {data.units.toLocaleString('es-AR')} un.
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
       {/* Category Pills & Filters */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
         {/* Category Tabs */}
@@ -312,7 +251,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar material, código o proveedor..."
+              placeholder="Buscar material, código o sector..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition-all"
@@ -382,14 +321,13 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                 <th className="py-3 px-3 text-right font-bold text-indigo-700 bg-indigo-50/50">
                   Total a Pedir
                 </th>
-                <th className="py-3 px-3">Proveedor</th>
                 <th className="py-3 px-3 text-center">Ajuste Bultos</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     No se encontraron materiales con los filtros aplicados.
                   </td>
                 </tr>
@@ -484,11 +422,6 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                         ) : (
                           <span className="text-slate-400 font-normal">0 (Cubierto)</span>
                         )}
-                      </td>
-
-                      {/* Provider */}
-                      <td className="py-3 px-3 text-slate-600 text-[11px]">
-                        {item.provider}
                       </td>
 
                       {/* Quick Adjustment */}

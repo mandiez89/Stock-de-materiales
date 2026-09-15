@@ -6,6 +6,8 @@ export interface SyncResult {
   details?: any;
 }
 
+export const DEFAULT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbybX4AWT9dbezw88VdX5Lm9VjaWYOMj20TjcPOQ3pLAoD5bGCslHC4jb0NfpNSEasIR0g/exec';
+
 /**
  * Robust synchronization with Google Sheets Webhook
  * Compatible with Vercel (static deployment) and local environments.
@@ -20,7 +22,7 @@ export async function syncWithGoogleSheets(
     order?: any;
   }
 ): Promise<SyncResult> {
-  const url = (webhookUrl || localStorage.getItem('sugestion_webhook_url') || '').trim();
+  const url = (webhookUrl || localStorage.getItem('sugestion_webhook_url') || DEFAULT_WEBHOOK_URL).trim();
 
   if (!url) {
     return {

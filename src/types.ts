@@ -27,7 +27,6 @@ export interface MaterialItem {
   unitsToOrder: number;
   bultosToOrder: number;
   status: MaterialStatus;
-  provider: string;
   notes?: string;
   lastUpdated?: string;
 }

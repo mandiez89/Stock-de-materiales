@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Printer, ShoppingCart, Truck, AlertCircle, Layers } from 'lucide-react';
+import { X, Copy, Check, Printer, ShoppingCart, AlertCircle, Layers } from 'lucide-react';
 import { MaterialItem, MaterialCategory } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -18,18 +18,14 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedProvider, setSelectedProvider] = useState<string>('all');
 
   if (!isOpen) return null;
 
   const categories: MaterialCategory[] = ['Cajas', 'Celofanes', 'Bolsitas', 'Caballetes', 'Cartones'];
-  const providers = Array.from(new Set(itemsToOrder.map((i) => i.provider)));
 
-  // Filter items by category AND provider
+  // Filter items by category
   const filteredItems = itemsToOrder.filter((item) => {
-    const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchProv = selectedProvider === 'all' || item.provider === selectedProvider;
-    return matchCat && matchProv;
+    return selectedCategory === 'all' || item.category === selectedCategory;
   });
 
   const totalUnits = filteredItems.reduce((acc, i) => acc + i.unitsToOrder, 0);
@@ -39,9 +35,6 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
     text += `📅 *Mes:* ${monthName}\n`;
     if (selectedCategory !== 'all') {
       text += `📂 *Tipo de Producto:* ${selectedCategory}\n`;
-    }
-    if (selectedProvider !== 'all') {
-      text += `🏢 *Proveedor:* ${selectedProvider}\n`;
     }
     text += `🔢 *Volumen Total a Pedir:* ${totalUnits.toLocaleString('es-AR')} unidades\n\n`;
     text += `*DETALLE DE CANTIDADES TOTALES A PEDIR:*\n`;
@@ -98,7 +91,7 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
           </button>
         </div>
 
-        {/* Filter bar: By Product Type / Category and optionally Provider */}
+        {/* Filter bar: By Product Type / Category */}
         <div className="px-6 py-3 bg-slate-100/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-3">
             {/* Filter by Product Type / Category */}
@@ -115,25 +108,6 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                 {categories.map((c) => (
                   <option key={c} value={c}>
                     {c} ({itemsToOrder.filter((i) => i.category === c).length})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter by Provider */}
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-slate-500 flex items-center gap-1">
-                <Truck className="w-3.5 h-3.5" /> Proveedor:
-              </span>
-              <select
-                value={selectedProvider}
-                onChange={(e) => setSelectedProvider(e.target.value)}
-                className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-700 font-medium focus:ring-2 focus:ring-indigo-500 outline-hidden cursor-pointer"
-              >
-                <option value="all">Todos los Proveedores</option>
-                {providers.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
                   </option>
                 ))}
               </select>
@@ -169,7 +143,6 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                     <th className="py-3 px-4 text-right bg-indigo-50 font-bold text-indigo-950 text-sm">
                       Cantidad Total a Pedir
                     </th>
-                    <th className="py-3 px-4 text-left">Proveedor</th>
                     <th className="py-3 px-4 text-center">Urgencia</th>
                   </tr>
                 </thead>
@@ -198,9 +171,6 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                       {/* ONLY TOTAL UNITS - NO BULTOS */}
                       <td className="py-3 px-4 text-right font-black text-indigo-700 font-mono text-base bg-indigo-50/50">
                         {item.unitsToOrder.toLocaleString('es-AR')} un.
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 text-[11px] truncate max-w-[130px]">
-                        {item.provider}
                       </td>
                       <td className="py-3 px-4 text-center">
                         {item.status === 'CRITICO' ? (

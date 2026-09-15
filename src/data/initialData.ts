@@ -1,18 +1,18 @@
 import { MaterialItem, MonthlyFactor, InventoryRecord } from '../types';
 
 export const MONTHLY_FACTORS: MonthlyFactor[] = [
-  { month: 1, name: 'Enero', shortName: 'Ene', factor: 0.85, seasonName: 'Temporada Baja (Receso estival)', description: 'Consumo reducido de medias y pantys por verano' },
-  { month: 2, name: 'Febrero', shortName: 'Feb', factor: 0.90, seasonName: 'Inicio de Producción', description: 'Comienzo de preparación de temporada escolar y otoño' },
-  { month: 3, name: 'Marzo', shortName: 'Mar', factor: 1.15, seasonName: 'Temporada Media-Alta', description: 'Lanzamiento de colecciones otoño e inicio de clases' },
-  { month: 4, name: 'Abril', shortName: 'Abr', factor: 1.25, seasonName: 'Temporada Alta (Otoño)', description: 'Pico de consumo de pantys, medias lycra y cajas' },
-  { month: 5, name: 'Mayo', shortName: 'May', factor: 1.30, seasonName: 'Temporada Alta (Invierno)', description: 'Máximo histórico anual de empaque y demanda' },
-  { month: 6, name: 'Junio', shortName: 'Jun', factor: 1.30, seasonName: 'Temporada Alta (Invierno)', description: 'Demanda invernal sostenida, reposición constante' },
-  { month: 7, name: 'Julio', shortName: 'Jul', factor: 1.20, seasonName: 'Temporada Alta (Vacaciones)', description: 'Fin de invierno, stock de seguridad preventivo' },
-  { month: 8, name: 'Agosto', shortName: 'Ago', factor: 1.10, seasonName: 'Temporada Media-Alta (Actual)', description: 'Transición hacia primavera y Día de las Infancias' },
-  { month: 9, name: 'Septiembre', shortName: 'Sep', factor: 1.15, seasonName: 'Temporada Media-Alta (Primavera)', description: 'Campaña Primavera/Verano y preparativos Día de la Madre' },
-  { month: 10, name: 'Octubre', shortName: 'Oct', factor: 1.25, seasonName: 'Temporada Alta (Día de la Madre)', description: 'Pico de ventas de bombachas, fantasía y regalos' },
-  { month: 11, name: 'Noviembre', shortName: 'Nov', factor: 1.20, seasonName: 'Temporada Alta (Fin de Año)', description: 'Preparativos para fiestas y cierre de año' },
-  { month: 12, name: 'Diciembre', shortName: 'Dic', factor: 1.10, seasonName: 'Temporada Alta (Navidad)', description: 'Despacho masivo festivo y stock para enero' },
+  { month: 1, name: 'Enero', shortName: 'Ene', factor: 1.0, seasonName: 'Enero', description: 'Stock estándar' },
+  { month: 2, name: 'Febrero', shortName: 'Feb', factor: 1.0, seasonName: 'Febrero', description: 'Stock estándar' },
+  { month: 3, name: 'Marzo', shortName: 'Mar', factor: 1.0, seasonName: 'Marzo', description: 'Stock estándar' },
+  { month: 4, name: 'Abril', shortName: 'Abr', factor: 1.0, seasonName: 'Abril', description: 'Stock estándar' },
+  { month: 5, name: 'Mayo', shortName: 'May', factor: 1.0, seasonName: 'Mayo', description: 'Stock estándar' },
+  { month: 6, name: 'Junio', shortName: 'Jun', factor: 1.0, seasonName: 'Junio', description: 'Stock estándar' },
+  { month: 7, name: 'Julio', shortName: 'Jul', factor: 1.0, seasonName: 'Julio', description: 'Stock estándar' },
+  { month: 8, name: 'Agosto', shortName: 'Ago', factor: 1.0, seasonName: 'Agosto', description: 'Stock estándar' },
+  { month: 9, name: 'Septiembre', shortName: 'Sep', factor: 1.0, seasonName: 'Septiembre', description: 'Stock estándar' },
+  { month: 10, name: 'Octubre', shortName: 'Oct', factor: 1.0, seasonName: 'Octubre', description: 'Stock estándar' },
+  { month: 11, name: 'Noviembre', shortName: 'Nov', factor: 1.0, seasonName: 'Noviembre', description: 'Stock estándar' },
+  { month: 12, name: 'Diciembre', shortName: 'Dic', factor: 1.0, seasonName: 'Diciembre', description: 'Stock estándar' },
 ];
 
 const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjusted' | 'unitsToOrder' | 'bultosToOrder' | 'status'>[] = [
@@ -26,8 +26,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 2080,
     minStockBase: 1500,
     maxStockBase: 3500,
-    provider: 'Cartonera Central',
-    notes: 'Caja estándar para medias 3/4'
+notes: 'Caja estándar para medias 3/4'
   },
 
 
@@ -40,8 +39,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 7930,
     minStockBase: 3000,
     maxStockBase: 7000,
-    provider: 'Cartonera Central',
-    notes: 'Buen stock acumulado'
+notes: 'Buen stock acumulado'
   },
   {
     id: 'caja-13cm',
@@ -52,8 +50,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 3220,
     minStockBase: 2500,
     maxStockBase: 5000,
-    provider: 'Cartonera Central',
-    notes: 'Caja profunda'
+notes: 'Caja profunda'
   },
   {
     id: 'cajitas-bombachas',
@@ -64,8 +61,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 525,
     minStockBase: 2500,
     maxStockBase: 6000,
-    provider: 'Cartonera Central',
-    notes: 'URGENTE: Solo 1 bulto en depósito. Peligro de quiebre para línea lencería'
+notes: 'URGENTE: Solo 1 bulto en depósito. Peligro de quiebre para línea lencería'
   },
 
   {
@@ -77,8 +73,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 4500,
     minStockBase: 3000,
     maxStockBase: 6000,
-    provider: 'Cartonera Central',
-    notes: 'Juego con bases Dussio'
+notes: 'Juego con bases Dussio'
   },
   {
     id: 'bases-dussio',
@@ -89,8 +84,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 4500,
     minStockBase: 3000,
     maxStockBase: 6000,
-    provider: 'Cartonera Central',
-    notes: 'Equilibrado con tapas'
+notes: 'Equilibrado con tapas'
   },
   {
     id: 'cajitas-dussio',
@@ -101,8 +95,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 8000,
     minStockBase: 4000,
     maxStockBase: 9000,
-    provider: 'Cartonera Central',
-    notes: 'Presentación chica Dussio'
+notes: 'Presentación chica Dussio'
   },
 
   // --- CELOFANES (SIN IMPRESIÓN) ---
@@ -115,8 +108,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 6000,
     minStockBase: 9000,
     maxStockBase: 20000,
-    provider: 'Plásticos & Celofanes Andina',
-    notes: 'ALERTA: Solo 2 bultos. Reposición urgente para packaging'
+notes: 'ALERTA: Solo 2 bultos. Reposición urgente para packaging'
   },
 
   {
@@ -128,8 +120,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 15000,
     minStockBase: 12000,
     maxStockBase: 30000,
-    provider: 'Plásticos & Celofanes Andina',
-    notes: 'Alto rendimiento por bulto'
+notes: 'Alto rendimiento por bulto'
   },
   {
     id: 'celofan-chicos-sin-solapa',
@@ -140,8 +131,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 10000,
     minStockBase: 10000,
     maxStockBase: 25000,
-    provider: 'Plásticos & Celofanes Andina',
-    notes: 'Límite de reposición'
+notes: 'Límite de reposición'
   },
   {
     id: 'celofan-chicos-con-solapa',
@@ -152,8 +142,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 15000,
     minStockBase: 10000,
     maxStockBase: 25000,
-    provider: 'Plásticos & Celofanes Andina',
-    notes: 'Stock regular'
+notes: 'Stock regular'
   },
   {
     id: 'celofan-extra-grandes',
@@ -164,8 +153,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 4000,
     minStockBase: 5000,
     maxStockBase: 15000,
-    provider: 'Plásticos & Celofanes Andina',
-    notes: 'Consumo para trusas y fajas'
+notes: 'Consumo para trusas y fajas'
   },
   {
     id: 'celofan-5030',
@@ -176,8 +164,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 1000,
     minStockBase: 2000,
     maxStockBase: 6000,
-    provider: 'Plásticos & Celofanes Andina',
-    notes: 'Solo 1 bulto disponible'
+notes: 'Solo 1 bulto disponible'
   },
 
   // --- BOLSITAS (CON IMPRESIÓN) ---
@@ -190,8 +177,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 15000,
     minStockBase: 10000,
     maxStockBase: 25000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Línea Clásica'
+notes: 'Línea Clásica'
   },
   {
     id: 'bolsita-generico-magenta',
@@ -202,8 +188,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 12000,
     minStockBase: 10000,
     maxStockBase: 25000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Línea Juvenil'
+notes: 'Línea Juvenil'
   },
   {
     id: 'bolsita-generico-verde',
@@ -214,8 +199,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 20000,
     minStockBase: 12000,
     maxStockBase: 28000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Stock saludable'
+notes: 'Stock saludable'
   },
   {
     id: 'bolsita-generico-celeste',
@@ -226,8 +210,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 20000,
     minStockBase: 12000,
     maxStockBase: 28000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Línea Algodón'
+notes: 'Línea Algodón'
   },
   {
     id: 'bolsita-plantines',
@@ -238,8 +221,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 12000,
     minStockBase: 8000,
     maxStockBase: 20000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Packaging especial plantines'
+notes: 'Packaging especial plantines'
   },
   {
     id: 'bolsita-lycra',
@@ -250,8 +232,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 10000,
     minStockBase: 10000,
     maxStockBase: 24000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Producto de alta rotación'
+notes: 'Producto de alta rotación'
   },
   {
     id: 'bolsita-sugesteen-panty',
@@ -262,8 +243,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 10000,
     minStockBase: 10000,
     maxStockBase: 25000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Bolsa institucional Sugesteen'
+notes: 'Bolsa institucional Sugesteen'
   },
   {
     id: 'bolsita-sugesteen-panty-opaca',
@@ -274,8 +254,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 20000,
     minStockBase: 10000,
     maxStockBase: 25000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Contiene 2 bultos x 4000 + 6 bultos x 2000'
+notes: 'Contiene 2 bultos x 4000 + 6 bultos x 2000'
   },
   {
     id: 'bolsita-sugesteen-fantasia',
@@ -286,33 +265,32 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 7500,
     minStockBase: 7000,
     maxStockBase: 18000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'Línea de moda temporada'
+notes: 'Línea de moda temporada'
   },
 
   // --- CABALLETES (COLUMNA 1) ---
-  { id: 'cab-15', category: 'Caballetes', name: 'Caballete 15', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-36-37', category: 'Caballetes', name: 'Caballete 36/37', bultos: 11, unitsPerBulto: 250, totalUnits: 2750, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-103', category: 'Caballetes', name: 'Caballete 103', bultos: 12, unitsPerBulto: 500, totalUnits: 6000, minStockBase: 3000, maxStockBase: 7000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-106', category: 'Caballetes', name: 'Caballete 106', bultos: 8, unitsPerBulto: 500, totalUnits: 4000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-110', category: 'Caballetes', name: 'Caballete 110', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-114', category: 'Caballetes', name: 'Caballete 114', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-126', category: 'Caballetes', name: 'Caballete 126', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-127', category: 'Caballetes', name: 'Caballete 127', bultos: 12, unitsPerBulto: 500, totalUnits: 6000, minStockBase: 3000, maxStockBase: 7000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-155', category: 'Caballetes', name: 'Caballete 155', bultos: 2, unitsPerBulto: 500, totalUnits: 1000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP', notes: 'Bajo stock' },
-  { id: 'cab-160', category: 'Caballetes', name: 'Caballete 160', bultos: 7, unitsPerBulto: 500, totalUnits: 3500, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-161', category: 'Caballetes', name: 'Caballete 161', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-187', category: 'Caballetes', name: 'Caballete 187', bultos: 10, unitsPerBulto: 500, totalUnits: 5000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-350', category: 'Caballetes', name: 'Caballete 350', bultos: 9, unitsPerBulto: 500, totalUnits: 4500, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-505', category: 'Caballetes', name: 'Caballete 505', bultos: 8, unitsPerBulto: 500, totalUnits: 4000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-510', category: 'Caballetes', name: 'Caballete 510', bultos: 10, unitsPerBulto: 500, totalUnits: 5000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-525', category: 'Caballetes', name: 'Caballete 525', bultos: 10, unitsPerBulto: 500, totalUnits: 5000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-606', category: 'Caballetes', name: 'Caballete 606', bultos: 6, unitsPerBulto: 500, totalUnits: 3000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-607', category: 'Caballetes', name: 'Caballete 607', bultos: 6, unitsPerBulto: 1600, totalUnits: 9600, minStockBase: 5000, maxStockBase: 12000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-616-656', category: 'Caballetes', name: 'Caballete 616 / 656', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-707', category: 'Caballetes', name: 'Caballete 707', bultos: 7, unitsPerBulto: 500, totalUnits: 3500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-806', category: 'Caballetes', name: 'Caballete 806', bultos: 4, unitsPerBulto: 500, totalUnits: 2000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-808', category: 'Caballetes', name: 'Caballete 808', bultos: 7, unitsPerBulto: 500, totalUnits: 3500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
+  { id: 'cab-15', category: 'Caballetes', name: 'Caballete 15', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-36-37', category: 'Caballetes', name: 'Caballete 36/37', bultos: 11, unitsPerBulto: 250, totalUnits: 2750, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-103', category: 'Caballetes', name: 'Caballete 103', bultos: 12, unitsPerBulto: 500, totalUnits: 6000, minStockBase: 3000, maxStockBase: 7000 },
+  { id: 'cab-106', category: 'Caballetes', name: 'Caballete 106', bultos: 8, unitsPerBulto: 500, totalUnits: 4000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-110', category: 'Caballetes', name: 'Caballete 110', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-114', category: 'Caballetes', name: 'Caballete 114', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-126', category: 'Caballetes', name: 'Caballete 126', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-127', category: 'Caballetes', name: 'Caballete 127', bultos: 12, unitsPerBulto: 500, totalUnits: 6000, minStockBase: 3000, maxStockBase: 7000 },
+  { id: 'cab-155', category: 'Caballetes', name: 'Caballete 155', bultos: 2, unitsPerBulto: 500, totalUnits: 1000, minStockBase: 2000, maxStockBase: 5000,notes: 'Bajo stock' },
+  { id: 'cab-160', category: 'Caballetes', name: 'Caballete 160', bultos: 7, unitsPerBulto: 500, totalUnits: 3500, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-161', category: 'Caballetes', name: 'Caballete 161', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-187', category: 'Caballetes', name: 'Caballete 187', bultos: 10, unitsPerBulto: 500, totalUnits: 5000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-350', category: 'Caballetes', name: 'Caballete 350', bultos: 9, unitsPerBulto: 500, totalUnits: 4500, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-505', category: 'Caballetes', name: 'Caballete 505', bultos: 8, unitsPerBulto: 500, totalUnits: 4000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-510', category: 'Caballetes', name: 'Caballete 510', bultos: 10, unitsPerBulto: 500, totalUnits: 5000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-525', category: 'Caballetes', name: 'Caballete 525', bultos: 10, unitsPerBulto: 500, totalUnits: 5000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-606', category: 'Caballetes', name: 'Caballete 606', bultos: 6, unitsPerBulto: 500, totalUnits: 3000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-607', category: 'Caballetes', name: 'Caballete 607', bultos: 6, unitsPerBulto: 1600, totalUnits: 9600, minStockBase: 5000, maxStockBase: 12000 },
+  { id: 'cab-616-656', category: 'Caballetes', name: 'Caballete 616 / 656', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-707', category: 'Caballetes', name: 'Caballete 707', bultos: 7, unitsPerBulto: 500, totalUnits: 3500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-806', category: 'Caballetes', name: 'Caballete 806', bultos: 4, unitsPerBulto: 500, totalUnits: 2000, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-808', category: 'Caballetes', name: 'Caballete 808', bultos: 7, unitsPerBulto: 500, totalUnits: 3500, minStockBase: 2000, maxStockBase: 5000 },
   {
     id: 'cab-909',
     category: 'Caballetes',
@@ -322,23 +300,22 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 500,
     minStockBase: 2500,
     maxStockBase: 6000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'CRÍTICO: Solo 1 bulto en stock (500 un)'
+notes: 'CRÍTICO: Solo 1 bulto en stock (500 un)'
   },
 
-  { id: 'cab-2011', category: 'Caballetes', name: 'Caballete 2011', bultos: 2, unitsPerBulto: 500, totalUnits: 1000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP', notes: 'Stock bajo' },
-  { id: 'cab-2161', category: 'Caballetes', name: 'Caballete 2161', bultos: 12, unitsPerBulto: 500, totalUnits: 6000, minStockBase: 3000, maxStockBase: 7000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-2300', category: 'Caballetes', name: 'Caballete 2300', bultos: 4, unitsPerBulto: 500, totalUnits: 2000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-2550', category: 'Caballetes', name: 'Caballete 2550', bultos: 8, unitsPerBulto: 500, totalUnits: 4000, minStockBase: 2500, maxStockBase: 6000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-2012-2013', category: 'Caballetes', name: 'Caballete 2012 - 2013', bultos: 0, unitsPerBulto: 500, totalUnits: 0, minStockBase: 1500, maxStockBase: 4000, provider: 'Imprenta Gráfica MP', notes: 'Sin existencia física (-) en planilla' },
+  { id: 'cab-2011', category: 'Caballetes', name: 'Caballete 2011', bultos: 2, unitsPerBulto: 500, totalUnits: 1000, minStockBase: 2000, maxStockBase: 5000,notes: 'Stock bajo' },
+  { id: 'cab-2161', category: 'Caballetes', name: 'Caballete 2161', bultos: 12, unitsPerBulto: 500, totalUnits: 6000, minStockBase: 3000, maxStockBase: 7000 },
+  { id: 'cab-2300', category: 'Caballetes', name: 'Caballete 2300', bultos: 4, unitsPerBulto: 500, totalUnits: 2000, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-2550', category: 'Caballetes', name: 'Caballete 2550', bultos: 8, unitsPerBulto: 500, totalUnits: 4000, minStockBase: 2500, maxStockBase: 6000 },
+  { id: 'cab-2012-2013', category: 'Caballetes', name: 'Caballete 2012 - 2013', bultos: 0, unitsPerBulto: 500, totalUnits: 0, minStockBase: 1500, maxStockBase: 4000,notes: 'Sin existencia física (-) en planilla' },
 
   // --- CABALLETES (COLUMNA 2) ---
-  { id: 'cab-1300', category: 'Caballetes', name: 'Caballete 1300', bultos: 18, unitsPerBulto: 525, totalUnits: 9450, minStockBase: 3500, maxStockBase: 8000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-2561', category: 'Caballetes', name: 'Caballete 2561', bultos: 6, unitsPerBulto: 500, totalUnits: 3000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-4500', category: 'Caballetes', name: 'Caballete 4500', bultos: 11, unitsPerBulto: 500, totalUnits: 5500, minStockBase: 3000, maxStockBase: 7000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-6000', category: 'Caballetes', name: 'Caballete 6000', bultos: 23, unitsPerBulto: 250, totalUnits: 5750, minStockBase: 3000, maxStockBase: 7000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-7000', category: 'Caballetes', name: 'Caballete 7000', bultos: 14, unitsPerBulto: 500, totalUnits: 7000, minStockBase: 3000, maxStockBase: 8000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-7200', category: 'Caballetes', name: 'Caballete 7200', bultos: 4, unitsPerBulto: 500, totalUnits: 2000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
+  { id: 'cab-1300', category: 'Caballetes', name: 'Caballete 1300', bultos: 18, unitsPerBulto: 525, totalUnits: 9450, minStockBase: 3500, maxStockBase: 8000 },
+  { id: 'cab-2561', category: 'Caballetes', name: 'Caballete 2561', bultos: 6, unitsPerBulto: 500, totalUnits: 3000, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-4500', category: 'Caballetes', name: 'Caballete 4500', bultos: 11, unitsPerBulto: 500, totalUnits: 5500, minStockBase: 3000, maxStockBase: 7000 },
+  { id: 'cab-6000', category: 'Caballetes', name: 'Caballete 6000', bultos: 23, unitsPerBulto: 250, totalUnits: 5750, minStockBase: 3000, maxStockBase: 7000 },
+  { id: 'cab-7000', category: 'Caballetes', name: 'Caballete 7000', bultos: 14, unitsPerBulto: 500, totalUnits: 7000, minStockBase: 3000, maxStockBase: 8000 },
+  { id: 'cab-7200', category: 'Caballetes', name: 'Caballete 7200', bultos: 4, unitsPerBulto: 500, totalUnits: 2000, minStockBase: 2000, maxStockBase: 5000 },
   {
     id: 'cab-7201',
     category: 'Caballetes',
@@ -348,12 +325,11 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 500,
     minStockBase: 2500,
     maxStockBase: 6000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'CRÍTICO: Stock al límite (1 bulto)'
+notes: 'CRÍTICO: Stock al límite (1 bulto)'
   },
 
-  { id: 'cab-7500', category: 'Caballetes', name: 'Caballete 7500', bultos: 4, unitsPerBulto: 350, totalUnits: 1400, minStockBase: 1500, maxStockBase: 4000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-7520', category: 'Caballetes', name: 'Caballete 7520', bultos: 3, unitsPerBulto: 350, totalUnits: 1050, minStockBase: 1500, maxStockBase: 4000, provider: 'Imprenta Gráfica MP', notes: 'Stock bajo' },
+  { id: 'cab-7500', category: 'Caballetes', name: 'Caballete 7500', bultos: 4, unitsPerBulto: 350, totalUnits: 1400, minStockBase: 1500, maxStockBase: 4000 },
+  { id: 'cab-7520', category: 'Caballetes', name: 'Caballete 7520', bultos: 3, unitsPerBulto: 350, totalUnits: 1050, minStockBase: 1500, maxStockBase: 4000,notes: 'Stock bajo' },
   {
     id: 'cab-8100',
     category: 'Caballetes',
@@ -363,12 +339,11 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 0,
     minStockBase: 2000,
     maxStockBase: 5000,
-    provider: 'Imprenta Gráfica MP',
-    notes: 'QUIEBRE TOTAL: 0 bultos en depósito'
+notes: 'QUIEBRE TOTAL: 0 bultos en depósito'
   },
-  { id: 'cab-8300', category: 'Caballetes', name: 'Caballete 8300', bultos: 2, unitsPerBulto: 500, totalUnits: 1000, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP', notes: 'Stock bajo' },
-  { id: 'cab-8400', category: 'Caballetes', name: 'Caballete 8400', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP' },
-  { id: 'cab-8500', category: 'Caballetes', name: 'Caballete 8500', bultos: 3, unitsPerBulto: 500, totalUnits: 1500, minStockBase: 2000, maxStockBase: 5000, provider: 'Imprenta Gráfica MP', notes: 'Por debajo del mínimo' },
+  { id: 'cab-8300', category: 'Caballetes', name: 'Caballete 8300', bultos: 2, unitsPerBulto: 500, totalUnits: 1000, minStockBase: 2000, maxStockBase: 5000,notes: 'Stock bajo' },
+  { id: 'cab-8400', category: 'Caballetes', name: 'Caballete 8400', bultos: 5, unitsPerBulto: 500, totalUnits: 2500, minStockBase: 2000, maxStockBase: 5000 },
+  { id: 'cab-8500', category: 'Caballetes', name: 'Caballete 8500', bultos: 3, unitsPerBulto: 500, totalUnits: 1500, minStockBase: 2000, maxStockBase: 5000,notes: 'Por debajo del mínimo' },
 
   // --- CARTONES ---
   {
@@ -380,8 +355,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 12000,
     minStockBase: 8000,
     maxStockBase: 20000,
-    provider: 'Cartonera Central',
-    notes: 'Cartón soporte grande'
+notes: 'Cartón soporte grande'
   },
   {
     id: 'carton-medianos',
@@ -392,8 +366,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 13200,
     minStockBase: 8000,
     maxStockBase: 20000,
-    provider: 'Cartonera Central',
-    notes: 'Cartón mediano'
+notes: 'Cartón mediano'
   },
   {
     id: 'carton-chicos',
@@ -404,8 +377,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 4000,
     minStockBase: 6000,
     maxStockBase: 16000,
-    provider: 'Cartonera Central',
-    notes: 'ALERTA: Solo 1 bulto'
+notes: 'ALERTA: Solo 1 bulto'
   },
   {
     id: 'carton-plantines',
@@ -416,8 +388,7 @@ const BASE_RAW_MATERIALS: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjus
     totalUnits: 0,
     minStockBase: 5000,
     maxStockBase: 12000,
-    provider: 'Cartonera Central',
-    notes: 'Sin stock físico (-)'
+notes: 'Sin stock físico (-)'
   }
 ];
 

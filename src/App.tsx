@@ -132,8 +132,10 @@ export default function App() {
           return {
             ...oldItem,
             bultos: found.bultos,
+            unitsPerBulto: found.unitsPerBulto,
             totalUnits: found.totalUnits,
             isDirectUnits: found.isDirectUnits,
+            allowDirectTotal: found.allowDirectTotal,
           };
         }
         return oldItem;
