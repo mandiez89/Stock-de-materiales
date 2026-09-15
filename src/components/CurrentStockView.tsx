@@ -122,7 +122,7 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="h-12 px-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-hidden cursor-pointer"
           >
-            <option value="all">Todos los Sectores ({items.length})</option>
+            <option value="all">Todos los Tipos de Material ({items.length})</option>
             {categories.map((c) => (
               <option key={c} value={c}>
                 {c} ({items.filter((i) => i.category === c).length})
@@ -163,7 +163,7 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100/80 border-b-2 border-slate-200 text-xs font-black text-slate-700 uppercase tracking-wider">
-                <th className="py-4 px-4">Sector</th>
+                <th className="py-4 px-4">Tipo de Material</th>
                 <th className="py-4 px-4">Material / Denominación</th>
                 <th className="py-4 px-4 text-center">Bultos</th>
                 <th className="py-4 px-4 text-right">Unid. x Bulto</th>

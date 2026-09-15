@@ -129,7 +129,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
             <span className="text-2xl font-black text-slate-900">{totalCount}</span>
             <span className="text-xs text-slate-400">materiales</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Relevados en 5 sectores</p>
+          <p className="text-[11px] text-slate-500 mt-1">Relevados en 5 tipos de material</p>
         </div>
 
         {/* Critical */}
@@ -218,7 +218,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
         {/* Category Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 pl-1 pr-2">
-            <Layers className="w-3.5 h-3.5" /> Sectores:
+            <Layers className="w-3.5 h-3.5" /> Tipo:
           </span>
           {categories.map((cat) => (
             <button
@@ -251,7 +251,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar material, código o sector..."
+              placeholder="Buscar material, código o tipo..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition-all"

@@ -125,7 +125,7 @@ export const MonthlyStockEntry: React.FC<MonthlyStockEntryProps> = ({
               </span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Carga rápida por sector. Al ingresar los bultos, el sistema calcula automáticamente las unidades totales y evalúa el pedido para {selectedMonth.name}.
+              Carga rápida por tipo de material. Al ingresar los bultos, el sistema calcula automáticamente las unidades totales y evalúa el pedido para {selectedMonth.name}.
             </p>
           </div>
 
@@ -182,7 +182,7 @@ export const MonthlyStockEntry: React.FC<MonthlyStockEntryProps> = ({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Notas / Observaciones del Sector:</label>
+            <label className="block font-semibold text-slate-700 mb-1">Notas / Observaciones del Conteo:</label>
             <input
               type="text"
               value={notes}

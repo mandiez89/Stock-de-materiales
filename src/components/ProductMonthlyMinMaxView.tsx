@@ -232,14 +232,14 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
           {/* Category Filter */}
           <div>
             <label className="block text-slate-500 font-semibold mb-1">
-              Sector / Categoría:
+              Tipo de material:
             </label>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-hidden cursor-pointer"
             >
-              <option value="all">Todos los Sectores ({localItems.length})</option>
+              <option value="all">Todos los Tipos de Material ({localItems.length})</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
                   {c} ({localItems.filter((i) => i.category === c).length})
@@ -286,7 +286,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                <th className="py-3 px-4">Sector</th>
+                <th className="py-3 px-4">Tipo de Material</th>
                 <th className="py-3 px-4">Material / Denominación</th>
                 <th className="py-3 px-4 text-right">Unid. x Bulto</th>
                 <th className="py-3 px-4 text-center bg-indigo-50/70 border-x border-indigo-100 text-indigo-900 font-bold">
