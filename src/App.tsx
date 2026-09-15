@@ -16,30 +16,14 @@ import { PurchaseOrderModal } from './components/PurchaseOrderModal';
 import { syncWithGoogleSheets } from './services/sheetsSync';
 
 export default function App() {
-  // Check URL parameter or hash for direct independent portal routing
-  // E.g. #operador, ?portal=operador, #admin, ?portal=admin
-  const [userRole, setUserRole] = useState<UserRole>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const hash = window.location.hash.toLowerCase();
-    if (urlParams.get('portal') === 'operador' || hash.includes('operador') || hash.includes('tablet')) {
-      return 'operator';
-    }
-    if (urlParams.get('portal') === 'admin' || hash.includes('admin')) {
-      return 'admin';
-    }
-    return (localStorage.getItem('sugestion_user_role') as UserRole) || 'operator';
-  });
+  // By default, the app ALWAYS opens in Tablet Mode (operator).
+  // The Admin portal is kept separate and secured with PIN 1458.
+  const [userRole, setUserRole] = useState<UserRole>('operator');
 
-  useEffect(() => {
-    localStorage.setItem('sugestion_user_role', userRole);
-  }, [userRole]);
+  // Navigation: default view is 'entry' (Planilla de Carga Tablet)
+  const [activeTab, setActiveTab] = useState<AppTab>('entry');
 
-  // Navigation
-  const [activeTab, setActiveTab] = useState<AppTab>(() => {
-    return userRole === 'operator' ? 'entry' : 'dashboard';
-  });
-
-  // Keep tab restricted if operator
+  // Strict operator protection: enforce operator tabs only
   useEffect(() => {
     if (userRole === 'operator' && activeTab !== 'entry' && activeTab !== 'stock') {
       setActiveTab('entry');
