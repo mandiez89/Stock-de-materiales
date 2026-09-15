@@ -1,0 +1,6 @@
+{
+  "name": "Control de Stock MP - Sugestión",
+  "description": "Sistema digital de control de stock de materias primas con alertas automáticas de reposición, cálculo estacional de mínimos/máximos y sincronización con Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
