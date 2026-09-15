@@ -339,77 +339,78 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-28 max-w-5xl mx-auto">
-      {/* Tablet Mode Header Banner */}
-      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800">
+    <div className="space-y-6 pb-36 max-w-6xl mx-auto px-2 sm:px-4">
+      {/* Tablet Mode Header Banner - High Contrast & Large for Seniors */}
+      <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-xl border-2 border-slate-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 flex items-center justify-center shrink-0">
-              <Tablet className="w-6 h-6" />
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 border-2 border-emerald-400/40 flex items-center justify-center shrink-0 shadow-inner">
+              <Tablet className="w-8 h-8" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold">Planilla de Carga de Stock en Depósito</h2>
-                <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
-                  <Wifi className="w-3 h-3" /> Memoria Offline Activa
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-lg sm:text-2xl font-black tracking-tight">Planilla de Carga de Stock en Depósito</h2>
+                <span className="text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                  <Wifi className="w-3.5 h-3.5" /> Memoria Offline Activa
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Carga por <strong>bultos cerrados</strong> o ingresa la <strong>cantidad total de unidades directamente</strong> si el material está suelto.
+              <p className="text-sm sm:text-base text-slate-300 mt-1 font-medium">
+                Contá los <strong>bultos cerrados</strong> o habilitá el <strong>total manual</strong> si tenés paquetes abiertos o unidades sueltas.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center text-xs">
-            <div className="flex items-center gap-1.5 text-slate-300 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-2.5 self-end sm:self-center">
+            <div className="flex items-center gap-2 text-slate-200 bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700 text-xs sm:text-sm font-semibold">
+              <Clock className="w-4 h-4 text-slate-400" />
               <span>Guardado: {lastSavedTime || 'Automático'}</span>
             </div>
             <button
               onClick={handleResetDraft}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer border border-slate-700 flex items-center gap-1.5 active:scale-95"
               title="Restaurar conteo"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden sm:inline">Reiniciar</span>
             </button>
           </div>
         </div>
 
-        {/* Responsible & Date Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
+        {/* Responsible & Date Bar - Large Inputs */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-4 border-t border-slate-800">
           <div>
-            <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-slate-400" /> Responsable de Carga:
+            <label className="block text-slate-300 font-bold text-sm sm:text-base mb-1.5 flex items-center gap-2">
+              <User className="w-4 h-4 text-slate-400" /> Operador Responsable:
             </label>
             <input
               type="text"
               value={responsible}
               onChange={(e) => setResponsible(e.target.value)}
-              placeholder="Nombre del operador"
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
+              placeholder="Escribe tu nombre..."
+              className="w-full h-12 sm:h-13 px-4 bg-slate-800 border-2 border-slate-600 rounded-xl text-white font-bold text-base sm:text-lg focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/50 outline-hidden"
             />
           </div>
 
           <div>
-            <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" /> Fecha del Relevamiento:
+            <label className="block text-slate-300 font-bold text-sm sm:text-base mb-1.5 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-slate-400" /> Fecha del Conteo:
             </label>
             <input
               type="date"
               value={entryDate}
               onChange={(e) => setEntryDate(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
+              className="w-full h-12 sm:h-13 px-4 bg-slate-800 border-2 border-slate-600 rounded-xl text-white font-bold text-base sm:text-lg focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/50 outline-hidden"
             />
           </div>
 
           <div>
-            <label className="block text-slate-400 font-semibold mb-1">
-              Período / Mes:
+            <label className="block text-slate-300 font-bold text-sm sm:text-base mb-1.5">
+              Período / Mes Activo:
             </label>
-            <div className="px-3 py-2 bg-slate-800/90 border border-slate-700 rounded-lg text-emerald-400 font-bold flex items-center justify-between">
+            <div className="h-12 sm:h-13 px-4 bg-slate-800 border-2 border-slate-600 rounded-xl text-emerald-300 font-black text-base sm:text-lg flex items-center justify-between">
               <span>{selectedMonth.name}</span>
-              <span className="text-[11px] text-slate-400 font-normal">
-                {itemsWithStock} de {formItems.length} con stock
+              <span className="text-xs sm:text-sm text-slate-300 font-semibold">
+                {itemsWithStock} de {formItems.length} contados
               </span>
             </div>
           </div>
@@ -418,96 +419,100 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
 
       {/* Sync Status Feedback */}
       {syncSuccessMessage && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs flex items-center gap-3 shadow-sm animate-fade-in">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          <div className="flex-1 font-semibold">{syncSuccessMessage}</div>
+        <div className="p-4 sm:p-5 bg-emerald-50 border-2 border-emerald-400 rounded-2xl text-emerald-950 text-sm sm:text-base flex items-center gap-3.5 shadow-md animate-fade-in font-bold">
+          <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+          <div className="flex-1">{syncSuccessMessage}</div>
         </div>
       )}
 
       {syncErrorMessage && (
-        <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 text-xs flex items-center gap-3 shadow-sm">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-          <div className="flex-1 font-semibold">{syncErrorMessage}</div>
+        <div className="p-4 sm:p-5 bg-rose-50 border-2 border-rose-400 rounded-2xl text-rose-950 text-sm sm:text-base flex items-center gap-3.5 shadow-md font-bold">
+          <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
+          <div className="flex-1">{syncErrorMessage}</div>
         </div>
       )}
 
-      {/* Sector Category Filter Bar (Large Tactile Pills) */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs space-y-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {categoriesList.map((cat) => {
-            const isSelected = activeCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`min-h-[46px] px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer shrink-0 ${
-                  isSelected
-                    ? 'bg-slate-900 text-white shadow-sm ring-2 ring-indigo-500'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
-                <span
-                  className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono ${
-                    isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'
+      {/* Sector Category Filter Bar (Large Tactile Pills for Tablet Fingers) */}
+      <div className="bg-white border-2 border-slate-200 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+        <div>
+          <span className="text-xs sm:text-sm font-black text-slate-500 uppercase tracking-wider block mb-2">
+            Filtrar por sector de depósito:
+          </span>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            {categoriesList.map((cat) => {
+              const isSelected = activeCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`min-h-[54px] sm:min-h-[58px] px-5 py-3 rounded-2xl text-sm sm:text-base font-black transition-all whitespace-nowrap flex items-center gap-2.5 cursor-pointer shrink-0 active:scale-95 ${
+                    isSelected
+                      ? 'bg-slate-900 text-white shadow-md ring-4 ring-indigo-500/30'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
                   }`}
                 >
-                  {cat.count}
-                </span>
-              </button>
-            );
-          })}
+                  <span className="text-xl">{cat.icon}</span>
+                  <span>{cat.label}</span>
+                  <span
+                    className={`text-xs font-mono px-2 py-0.5 rounded-full font-bold ${
+                      isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {cat.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Quick Search */}
+        {/* Quick Search - Large & Easy to Tap */}
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-6 h-6 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar material o código (ej: 8100, bombachas, plantines, celofán)..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
+            className="w-full h-14 sm:h-16 pl-13 pr-4 bg-slate-50 border-2 border-slate-300 rounded-2xl text-base sm:text-lg font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
           />
         </div>
 
-        {/* Banner de Modo de Carga */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
-          <div className="flex items-center gap-2">
-            <span className="p-1 bg-indigo-100 text-indigo-700 rounded-md font-bold shrink-0">
-              <Boxes className="w-3.5 h-3.5 inline mr-1" />
-              Regla de Carga:
+        {/* Banner de Modo de Carga - Friendly Guide for Seniors */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 bg-indigo-50/90 rounded-2xl border-2 border-indigo-200 text-slate-800">
+          <div className="flex items-center gap-3">
+            <span className="p-2 bg-indigo-600 text-white rounded-xl font-bold shrink-0">
+              <Boxes className="w-5 h-5" />
             </span>
-            <span className="text-slate-600">
-              Cargas <strong>Bultos</strong> y <strong>Cant. x Bulto</strong>. Por defecto la <strong>Cantidad Total</strong> está bloqueada en cálculo automático.
-            </span>
+            <p className="text-sm sm:text-base font-semibold leading-relaxed">
+              Cargá <strong>Bultos</strong> con los botones <strong>+</strong> y <strong>-</strong>. El <strong>Total de Unidades</strong> se calcula automáticamente. Si tenés unidades sueltas, tocá <strong>Total Manual</strong>.
+            </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
             <button
               type="button"
               onClick={() => handleToggleAllDirectTotal(true)}
-              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 text-xs sm:text-sm font-black rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 border-2 border-amber-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
               title="Permite editar la cantidad total directamente en todos los materiales"
             >
-              <Unlock className="w-3 h-3 text-amber-700" />
-              Habilitar Total Directo
+              <Unlock className="w-4 h-4 text-amber-800" />
+              <span>Habilitar Total Directo</span>
             </button>
             <button
               type="button"
               onClick={() => handleToggleAllDirectTotal(false)}
-              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 text-xs sm:text-sm font-black rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 border-2 border-slate-300 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="Bloquea la cantidad total en todos y vuelve al cálculo automático Bultos × Unidades"
             >
-              <Lock className="w-3 h-3 text-slate-600" />
-              Bloquear en Auto (Default)
+              <Lock className="w-4 h-4 text-slate-600" />
+              <span>Auto (Por defecto)</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Products grouped by clear Category Sections */}
-      <div className="space-y-6">
+      <div className="space-y-8">
         {filteredCategories.map((category) => {
           const categoryStyle = CATEGORY_STYLES[category];
           const categoryItems = formItems.filter(
@@ -520,22 +525,22 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           if (categoryItems.length === 0) return null;
 
           return (
-            <div key={category} className="space-y-2.5">
+            <div key={category} className="space-y-4">
               {/* Distinct Category Section Header */}
-              <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border ${categoryStyle.bg} ${categoryStyle.border}`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{categoryStyle.icon}</span>
-                  <h3 className={`font-black text-sm uppercase tracking-wide ${categoryStyle.text}`}>
+              <div className={`flex items-center justify-between px-5 py-3.5 rounded-2xl border-2 ${categoryStyle.bg} ${categoryStyle.border}`}>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl sm:text-3xl">{categoryStyle.icon}</span>
+                  <h3 className={`font-black text-base sm:text-lg uppercase tracking-wide ${categoryStyle.text}`}>
                     {categoryStyle.title}
                   </h3>
                 </div>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/80 border ${categoryStyle.border} ${categoryStyle.text}`}>
-                  {categoryItems.length} materiales en este sector
+                <span className={`text-xs sm:text-sm font-black px-3.5 py-1 rounded-full bg-white/90 border-2 ${categoryStyle.border} ${categoryStyle.text}`}>
+                  {categoryItems.length} materiales
                 </span>
               </div>
 
               {/* Items in this category */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {categoryItems.map((item) => {
                   const isZero = item.totalUnits === 0;
                   const isCritical = item.status === 'CRITICO';
@@ -543,123 +548,140 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className={`bg-white border-2 rounded-2xl p-4 shadow-xs transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                      className={`bg-white border-2 rounded-3xl p-5 sm:p-6 shadow-sm transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-5 ${
                         isZero
-                          ? 'border-rose-300 bg-rose-50/20'
+                          ? 'border-slate-300 hover:border-slate-400'
                           : isCritical
-                          ? 'border-amber-300 bg-amber-50/20'
-                          : 'border-slate-200 hover:border-slate-300'
+                          ? 'border-amber-400 bg-amber-50/15'
+                          : 'border-emerald-400 bg-emerald-50/10 shadow-xs'
                       }`}
                     >
-                      {/* Product description & info */}
+                      {/* Product description & info - Large & High Contrast */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase ${categoryStyle.bg} ${categoryStyle.text} ${categoryStyle.border}`}>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border uppercase ${categoryStyle.bg} ${categoryStyle.text} ${categoryStyle.border}`}>
                             {item.category}
                           </span>
-                          <h4 className="text-sm font-bold text-slate-900 tracking-tight">
+                          <h4 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
                             {item.name}
                           </h4>
-                          {isZero && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-                              Sin Stock (0 Unidades)
+                          {isZero ? (
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-300">
+                              Sin Stock (0 un.)
+                            </span>
+                          ) : (
+                            <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Contado
                             </span>
                           )}
                           {item.isDirectUnits && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                              Carga Directa por Unidades
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              Carga Directa
                             </span>
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500 font-mono">
-                          <span>Stock mínimo: <strong className="text-indigo-700">{item.minStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
-                          <span className="text-slate-300">•</span>
-                          <span>Stock máximo: <strong className="text-slate-700">{item.maxStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm sm:text-base text-slate-600 font-semibold">
+                          <span>Stock mínimo: <strong className="text-indigo-700 font-extrabold">{item.minStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
+                          <span className="text-slate-300 font-bold">•</span>
+                          <span>Stock máximo: <strong className="text-slate-800 font-extrabold">{item.maxStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
                         </div>
 
                         {item.notes && (
-                          <p className="text-[11px] text-slate-400 mt-1 truncate">
+                          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1.5">
                             {item.notes}
                           </p>
                         )}
                       </div>
 
-                      {/* Triple Input System: Bultos + Cantidad por Bulto + Cantidad Total (Bloqueada por defecto) */}
-                      <div className="bg-slate-50/90 border border-slate-200 rounded-xl p-3 flex flex-wrap lg:flex-nowrap items-center gap-3 shrink-0">
+                      {/* Triple Input System: Bultos + Cantidad por Bulto + Cantidad Total (Optimized for Seniors) */}
+                      <div className="bg-slate-100/90 border-2 border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-wrap lg:flex-nowrap items-center gap-4 sm:gap-6 shrink-0">
                         {/* 1. CANTIDAD DE BULTOS */}
                         <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-                            <Boxes className="w-3 h-3 text-indigo-600" /> Cant. Bultos
+                          <span className="text-xs sm:text-sm font-black text-slate-800 uppercase mb-2 flex items-center gap-1.5">
+                            <Boxes className="w-4 h-4 text-indigo-600" /> Bultos
                           </span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
+                            {/* Botón Menos */}
                             <button
                               type="button"
                               onClick={() => handleStepBultos(item.id, -1)}
                               disabled={item.bultos <= 0}
-                              className="w-8 h-8 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-13 h-13 sm:w-15 sm:h-15 rounded-2xl bg-white border-2 border-slate-300 hover:bg-slate-50 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed text-slate-900 font-black text-2xl flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
                               title="Restar 1 bulto"
                             >
-                              <Minus className="w-3.5 h-3.5" />
+                              <Minus className="w-6 h-6 stroke-[3]" />
                             </button>
 
+                            {/* Input Bultos */}
                             <input
                               type="number"
                               min="0"
                               value={item.bultos}
                               onChange={(e) => handleSetBultos(item.id, parseInt(e.target.value, 10))}
-                              className="w-14 h-8 text-center font-mono font-black text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-900"
+                              className="w-20 sm:w-22 h-13 sm:h-15 text-center font-mono font-black text-2xl sm:text-3xl border-2 border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-900 shadow-inner"
                             />
 
+                            {/* Botón Más (+1) */}
                             <button
                               type="button"
                               onClick={() => handleStepBultos(item.id, 1)}
-                              className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-13 h-13 sm:w-15 sm:h-15 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-black text-2xl flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
                               title="Sumar 1 bulto"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-6 h-6 stroke-[3]" />
+                            </button>
+
+                            {/* Botón Rápido +5 (Ideal para pallets o estibas) */}
+                            <button
+                              type="button"
+                              onClick={() => handleStepBultos(item.id, 5)}
+                              className="h-13 sm:h-15 px-3 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 border-2 border-indigo-200 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                              title="Sumar 5 bultos rápidamente"
+                            >
+                              +5
                             </button>
                           </div>
-                          <span className="text-[9px] text-slate-400 mt-0.5 font-medium">bultos cerrados</span>
+                          <span className="text-xs text-slate-500 font-bold mt-1.5">bultos cerrados</span>
                         </div>
 
-                        <div className="hidden sm:block text-slate-300 font-bold text-sm">×</div>
+                        <div className="hidden sm:block text-slate-400 font-black text-2xl">×</div>
 
                         {/* 2. CANTIDAD POR BULTO (EDITABLE) */}
                         <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-                            <Package className="w-3 h-3 text-indigo-600" /> Cant. x Bulto
+                          <span className="text-xs sm:text-sm font-black text-slate-800 uppercase mb-2 flex items-center gap-1.5">
+                            <Package className="w-4 h-4 text-indigo-600" /> Cant. x Bulto
                           </span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <input
                               type="number"
                               min="1"
                               value={item.unitsPerBulto}
                               onChange={(e) => handleSetUnitsPerBulto(item.id, parseInt(e.target.value, 10))}
-                              className="w-16 h-8 text-center font-mono font-bold text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-800"
+                              className="w-24 sm:w-28 h-13 sm:h-15 text-center font-mono font-black text-xl sm:text-2xl border-2 border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-800 shadow-inner"
                               title="Unidades contenidas en cada bulto"
                             />
-                            <span className="text-[11px] font-semibold text-slate-500">un.</span>
+                            <span className="text-sm sm:text-base font-black text-slate-600">un.</span>
                           </div>
-                          <span className="text-[9px] text-slate-400 mt-0.5 font-medium">por paquete</span>
+                          <span className="text-xs text-slate-500 font-bold mt-1.5">por paquete</span>
                         </div>
 
-                        <div className="hidden sm:block text-slate-300 font-bold text-sm">=</div>
+                        <div className="hidden sm:block text-slate-400 font-black text-2xl">=</div>
 
                         {/* 3. CANTIDAD TOTAL (BLOQUEADA POR DEFECTO, HABILITABLE CON BOTÓN) */}
-                        <div className="flex flex-col items-center sm:items-start pl-1 sm:border-l border-slate-200">
-                          <div className="flex items-center justify-between w-full gap-1 mb-1">
-                            <span className="text-[10px] font-bold text-slate-800 uppercase flex items-center gap-1">
-                              <Hash className="w-3 h-3 text-indigo-600" /> Cantidad Total
+                        <div className="flex flex-col items-center sm:items-start pl-1 sm:border-l-2 border-slate-200">
+                          <div className="flex items-center justify-between w-full gap-2 mb-2">
+                            <span className="text-xs sm:text-sm font-black text-slate-900 uppercase flex items-center gap-1.5">
+                              <Hash className="w-4 h-4 text-indigo-600" /> Total Unidades
                             </span>
                             {/* Botón para habilitar carga directa */}
                             <button
                               type="button"
                               onClick={() => handleToggleAllowDirectTotal(item.id)}
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 transition-all cursor-pointer ${
+                              className={`text-xs font-black px-2.5 py-1 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 border-2 ${
                                 item.allowDirectTotal
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-xs'
-                                  : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                                  ? 'bg-amber-100 text-amber-950 border-amber-400 shadow-xs'
+                                  : 'bg-slate-200 hover:bg-slate-300 text-slate-800 border-slate-300'
                               }`}
                               title={
                                 item.allowDirectTotal
@@ -669,47 +691,47 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                             >
                               {item.allowDirectTotal ? (
                                 <>
-                                  <Unlock className="w-2.5 h-2.5 text-amber-700" />
+                                  <Unlock className="w-3.5 h-3.5 text-amber-800" />
                                   <span>Total Manual</span>
                                 </>
                               ) : (
                                 <>
-                                  <Lock className="w-2.5 h-2.5 text-slate-500" />
-                                  <span>Auto (Bloqueado)</span>
+                                  <Lock className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>Auto</span>
                                 </>
                               )}
                             </button>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-2 w-full">
                             <input
                               type="number"
                               min="0"
                               disabled={!item.allowDirectTotal}
                               value={item.totalUnits}
                               onChange={(e) => handleSetTotalUnitsDirect(item.id, parseInt(e.target.value, 10))}
-                              className={`w-24 h-8 px-2 text-right font-mono font-black text-sm rounded-lg border transition-all ${
+                              className={`w-full sm:w-44 h-13 sm:h-15 px-3 text-right font-mono font-black text-2xl sm:text-3xl rounded-2xl border-2 transition-all ${
                                 item.allowDirectTotal
-                                  ? 'bg-amber-50 border-amber-400 text-amber-950 focus:ring-2 focus:ring-amber-500 outline-hidden'
-                                  : 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed select-none opacity-90'
+                                  ? 'bg-amber-50 border-amber-500 text-amber-950 focus:ring-2 focus:ring-amber-500 outline-hidden'
+                                  : 'bg-indigo-50/80 border-indigo-200 text-indigo-950 cursor-not-allowed select-none'
                               }`}
                               title={
                                 item.allowDirectTotal
                                   ? 'Carga manual de unidades totales habilitada'
-                                  : 'Bloqueado: se calcula automáticamente como Bultos × Cant. por bulto. Pulsa el botón "Auto" para habilitar carga manual.'
+                                  : 'Bloqueado: se calcula automáticamente como Bultos × Cant. por bulto.'
                               }
                             />
-                            <span className="text-xs font-bold text-slate-500">un.</span>
+                            <span className="text-sm sm:text-base font-black text-slate-600">un.</span>
                           </div>
 
-                          <div className="text-[9px] mt-0.5 font-medium">
+                          <div className="text-xs mt-1.5 font-bold">
                             {item.allowDirectTotal ? (
-                              <span className="text-amber-700 font-semibold flex items-center gap-0.5">
-                                <Unlock className="w-2.5 h-2.5" /> Ingreso manual activo
+                              <span className="text-amber-800 flex items-center gap-1">
+                                <Unlock className="w-3.5 h-3.5" /> Ingreso manual activo
                               </span>
                             ) : (
-                              <span className="text-slate-400 font-mono">
-                                Cálculo: {item.bultos} × {item.unitsPerBulto}
+                              <span className="text-slate-500 font-mono">
+                                Cálculo: {item.bultos} bultos × {item.unitsPerBulto}
                               </span>
                             )}
                           </div>
@@ -724,36 +746,36 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
         })}
       </div>
 
-      {/* Floating Action Bar (Sticky at bottom for Tablet) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md text-white border-t border-slate-800 p-3 sm:p-4 shadow-2xl">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-center sm:text-left">
-            <div className="flex items-center justify-center sm:justify-start gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <p className="font-bold text-white text-sm">
+      {/* Floating Action Bar (Sticky at bottom for Tablet) - Prominent & Senior Friendly */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md text-white border-t-2 border-slate-800 p-4 sm:p-5 shadow-2xl">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-center sm:text-left">
+            <div className="flex items-center justify-center sm:justify-start gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+              <p className="font-black text-white text-base sm:text-xl tracking-tight">
                 Total Contabilizado: {totalUnitsCounted.toLocaleString('es-AR')} unidades ({totalBultosCounted.toLocaleString('es-AR')} bultos)
               </p>
             </div>
-            <p className="text-slate-400 text-[11px]">
-              Operador: <strong className="text-slate-200">{responsible}</strong> • Fecha: <strong className="text-slate-200">{entryDate}</strong> • Mes: <strong className="text-emerald-400">{selectedMonth.name}</strong>
+            <p className="text-slate-300 text-xs sm:text-sm font-medium mt-0.5">
+              Operador: <strong className="text-white font-bold">{responsible || 'Sin asignar'}</strong> • Fecha: <strong className="text-white font-bold">{entryDate}</strong> • Mes: <strong className="text-emerald-400 font-bold">{selectedMonth.name}</strong>
             </p>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
             <button
               onClick={handleFinishAndSync}
               disabled={isSyncing}
-              className="w-full sm:w-auto min-h-[48px] px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer tracking-tight"
+              className="w-full sm:w-auto min-h-[58px] sm:min-h-[62px] px-8 sm:px-10 py-3.5 sm:py-4 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-base sm:text-xl rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer tracking-tight active:scale-95"
             >
               {isSyncing ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-3 border-slate-950 border-t-transparent rounded-full animate-spin" />
                   <span>Guardando en Google Sheets...</span>
                 </>
               ) : (
                 <>
-                  <SendHorizontal className="w-4 h-4" />
-                  <span>Guardar a Google Sheets</span>
+                  <SendHorizontal className="w-6 h-6" />
+                  <span>GUARDAR EN GOOGLE SHEETS</span>
                 </>
               )}
             </button>
