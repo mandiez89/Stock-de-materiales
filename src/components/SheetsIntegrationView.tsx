@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileSpreadsheet, 
   Copy, 
@@ -14,10 +14,14 @@ import {
   Sparkles,
   RefreshCw,
   Sliders,
-  Database
+  Database,
+  Table,
+  HelpCircle,
+  Key
 } from 'lucide-react';
 import { GOOGLE_APPS_SCRIPT_TEMPLATE, SHEETS_ARCHITECTURE_OPTIONS, exportInventoryToCSV } from '../data/sheetsIntegration';
 import { MaterialItem, MonthlyFactor } from '../types';
+import { syncWithGoogleSheets } from '../services/sheetsSync';
 import confetti from 'canvas-confetti';
 
 interface SheetsIntegrationViewProps {
@@ -33,9 +37,16 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
 }) => {
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedFormulas, setCopiedFormulas] = useState(false);
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState(() => {
+    return localStorage.getItem('sugestion_webhook_url') || '';
+  });
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+
+  // Save webhookUrl to localStorage
+  useEffect(() => {
+    localStorage.setItem('sugestion_webhook_url', webhookUrl);
+  }, [webhookUrl]);
 
   const handleCopyScript = () => {
     navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE);
@@ -49,7 +60,7 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Stock_MP_Sugestion_${selectedMonth.name}.csv`);
+    link.setAttribute('download', `Plantilla_Stock_MP_Sugestion_${selectedMonth.name}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -60,37 +71,31 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
     setSyncResult(null);
 
     try {
-      const res = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhookUrl,
-          payload: {
-            action: 'UPDATE_STOCK',
-            metadata: {
-              date: new Date().toLocaleDateString('es-AR'),
-              responsible: 'Operador Depósito',
-              month: selectedMonth.name,
-              criticalCount: items.filter((i) => i.status === 'CRITICO').length,
-              totalUnitsToOrder: items.reduce((acc, i) => acc + i.unitsToOrder, 0),
-            },
-            items,
-          },
-        }),
+      const responsible = localStorage.getItem('sugestion_tablet_responsible') || 'Operador Depósito';
+      const result = await syncWithGoogleSheets(webhookUrl, {
+        action: 'UPDATE_STOCK',
+        metadata: {
+          date: new Date().toLocaleDateString('es-AR'),
+          responsible,
+          month: selectedMonth.name,
+          criticalCount: items.filter((i) => i.status === 'CRITICO').length,
+          totalUnitsToOrder: items.reduce((acc, i) => acc + i.unitsToOrder, 0),
+        },
+        items,
       });
 
-      const data = await res.json();
-      if (data.success) {
+      if (result.success) {
         setSyncResult({
           success: true,
           message: webhookUrl
             ? '¡Sincronizado exitosamente con tu Google Sheet en vivo!'
-            : '¡Prueba de sincronización exitosa! Los 52 materiales han sido preparados y formateados para el Webhook.',
+            : '¡Prueba simulada exitosa! Los materiales han sido formateados para el Webhook.',
+          details: `${items.length} materiales procesados • Mes: ${selectedMonth.name} • Responsable: ${responsible}`,
         });
         onSyncSuccess();
         confetti({ particleCount: 50, spread: 60 });
       } else {
-        throw new Error(data.error || 'Error en la respuesta del Webhook');
+        throw new Error(result.message || 'Error en la respuesta del Webhook');
       }
     } catch (err: any) {
       setSyncResult({
@@ -345,12 +350,180 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
               )}
               <div>
                 <p className="font-semibold">{syncResult.message}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  52 materiales procesados • Mes: {selectedMonth.name} • Responsable: Vivi y Érica
-                </p>
+                {syncResult.details && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {syncResult.details}
+                  </p>
+                )}
+                {!syncResult.success && (
+                  <div className="mt-2.5 pt-2.5 border-t border-rose-200 text-[11px] text-rose-900 space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-rose-900">
+                      <Key className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Solución al error "Unexpected token 'T', 'The page c...' is not valid JSON":</span>
+                    </div>
+                    <p className="text-rose-800">
+                      Google Apps Script devolvió una página HTML de error de inicio de sesión de Google en lugar de responder JSON. Esto ocurre cuando la Web App no tiene permisos públicos.
+                    </p>
+                    <div className="bg-white/80 p-2.5 rounded border border-rose-200 font-mono text-[11px] space-y-1 text-slate-800">
+                      <p className="font-bold text-rose-800">Pasos para corregirlo en 1 minuto:</p>
+                      <p>1. En tu Google Sheet, abre <strong>Extensiones &gt; Apps Script</strong>.</p>
+                      <p>2. Arriba a la derecha haz clic en <strong>Implementar &gt; Administrar implementaciones</strong>.</p>
+                      <p>3. Haz clic en el <strong>icono de lápiz (Editar)</strong> junto a tu implementación.</p>
+                      <p>4. En el campo <strong>Quién tiene acceso (Who has access)</strong> selecciona: <span className="bg-emerald-100 text-emerald-900 px-1 font-bold rounded">Cualquier usuario (Anyone)</span>.</p>
+                      <p>5. En "Versión", cambia a <strong>Nueva versión</strong> y pulsa <strong>Implementar</strong>.</p>
+                      <p>6. Copia la nueva URL que termina en <code>/exec</code> y pégala arriba.</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* GUÍA VISUAL COMPLETA: Cómo debe ser el Google Sheet exacto */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <Table className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-base font-bold text-slate-900">
+                Estructura Exacta que debe tener tu Google Sheet
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Si quieres armar la hoja manualmente o verificar que tus columnas coincidan exactamente, esta es la plantilla recomendada:
+            </p>
+          </div>
+
+          <button
+            onClick={handleDownloadCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            Descargar Archivo CSV Listo para Google Sheets
+          </button>
+        </div>
+
+        {/* Hoja 1: Stock_Actual */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-900 font-mono font-bold text-xs rounded">
+                Pestaña 1
+              </span>
+              <strong className="text-sm text-slate-800 font-mono">Stock_Actual</strong>
+              <span className="text-xs text-slate-400">(hoja principal donde impacta el stock físico)</span>
+            </div>
+            <span className="text-[11px] text-slate-500">12 Columnas (A hasta L)</span>
+          </div>
+
+          <div className="overflow-x-auto border border-slate-200 rounded-lg">
+            <table className="w-full text-[11px] text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-900 text-slate-200 font-mono">
+                  <th className="p-2 border-r border-slate-800 text-center">Col</th>
+                  <th className="p-2 border-r border-slate-800">Nombre del Encabezado (Fila 1)</th>
+                  <th className="p-2 border-r border-slate-800">Tipo de Contenido</th>
+                  <th className="p-2">Ejemplo / Fórmula</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-sans">
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">A</td>
+                  <td className="p-2 font-bold text-slate-800">ID</td>
+                  <td className="p-2 text-slate-600">Identificador interno del material</td>
+                  <td className="p-2 font-mono text-slate-500">cajas-8100, celo-15x20</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">B</td>
+                  <td className="p-2 font-bold text-slate-800">Categoría</td>
+                  <td className="p-2 text-slate-600">Sector o familia de material</td>
+                  <td className="p-2 text-slate-700">Cajas, Celofanes, Bolsitas, Caballetes, Cartones</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">C</td>
+                  <td className="p-2 font-bold text-slate-800">Material</td>
+                  <td className="p-2 text-slate-600">Nombre y descripción comercial</td>
+                  <td className="p-2 text-slate-800 font-medium">Caja 8100 24 Bombachas 22x13.5x8</td>
+                </tr>
+                <tr className="hover:bg-slate-50 bg-indigo-50/30">
+                  <td className="p-2 font-mono font-bold text-center bg-indigo-50 text-indigo-700">D</td>
+                  <td className="p-2 font-bold text-indigo-950">Bultos</td>
+                  <td className="p-2 text-slate-600">Número de bultos cerrados relevados</td>
+                  <td className="p-2 font-mono text-indigo-700 font-bold">32</td>
+                </tr>
+                <tr className="hover:bg-slate-50 bg-indigo-50/30">
+                  <td className="p-2 font-mono font-bold text-center bg-indigo-50 text-indigo-700">E</td>
+                  <td className="p-2 font-bold text-indigo-950">Unidades x Bulto</td>
+                  <td className="p-2 text-slate-600">Cantidad de unidades por cada bulto</td>
+                  <td className="p-2 font-mono text-indigo-700 font-bold">65</td>
+                </tr>
+                <tr className="hover:bg-slate-50 bg-indigo-50/50">
+                  <td className="p-2 font-mono font-bold text-center bg-indigo-100 text-indigo-900">F</td>
+                  <td className="p-2 font-bold text-indigo-950">Total Unidades</td>
+                  <td className="p-2 text-slate-600">Fórmula de cálculo o ingreso directo</td>
+                  <td className="p-2 font-mono text-emerald-700 font-bold bg-emerald-50 px-1 rounded">=D2*E2</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">G</td>
+                  <td className="p-2 font-bold text-slate-800">Stock Mínimo</td>
+                  <td className="p-2 text-slate-600">Punto de reorden para el mes</td>
+                  <td className="p-2 font-mono text-slate-700">1.800</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">H</td>
+                  <td className="p-2 font-bold text-slate-800">Stock Máximo</td>
+                  <td className="p-2 text-slate-600">Capacidad objetivo de reposición</td>
+                  <td className="p-2 font-mono text-slate-700">3.600</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">I</td>
+                  <td className="p-2 font-bold text-slate-800">Estado</td>
+                  <td className="p-2 text-slate-600">Fórmula de alerta por semáforo</td>
+                  <td className="p-2 font-mono text-emerald-700 text-[10px] bg-slate-50 p-1 rounded">
+                    =SI(F2&lt;=G2*0.5, "🔴 CRITICO", SI(F2&lt;G2, "🟡 REPOSICION", "🟢 OPTIMO"))
+                  </td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">J</td>
+                  <td className="p-2 font-bold text-slate-800">Unidades a Pedir</td>
+                  <td className="p-2 text-slate-600">Fórmula de cálculo de compra</td>
+                  <td className="p-2 font-mono text-emerald-700 font-bold bg-emerald-50 px-1 rounded">
+                    =SI(F2&lt;G2, H2-F2, 0)
+                  </td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">K</td>
+                  <td className="p-2 font-bold text-slate-800">Proveedor</td>
+                  <td className="p-2 text-slate-600">Proveedor habitual</td>
+                  <td className="p-2 text-slate-700">Cartonera del Plata S.A.</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="p-2 font-mono font-bold text-center bg-slate-50 text-slate-600">L</td>
+                  <td className="p-2 font-bold text-slate-800">Fecha Actualización</td>
+                  <td className="p-2 text-slate-600">Fecha del último conteo en tablet</td>
+                  <td className="p-2 font-mono text-slate-500">15/09/2026</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Hoja 2: Historial_Cargas */}
+        <div className="space-y-2.5 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 font-mono font-bold text-xs rounded">
+                Pestaña 2 (Opcional - el script la crea sola)
+              </span>
+              <strong className="text-sm text-slate-800 font-mono">Historial_Cargas</strong>
+            </div>
+            <span className="text-[11px] text-slate-500">6 Columnas (A hasta F)</span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Encabezados: <code>Fecha | Responsable | Mes | Ítems Críticos | Unidades a Pedir | Notas</code>. Cada vez que el operador presiona "Enviar y Sincronizar con Google Sheets" desde la tablet, se agrega una nueva fila en esta pestaña con la auditoría del conteo.
+          </p>
         </div>
       </div>
 

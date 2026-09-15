@@ -17,7 +17,9 @@ import {
   Check, 
   AlertCircle,
   Package,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { MaterialItem, MaterialCategory, MonthlyFactor } from '../types';
 import confetti from 'canvas-confetti';
@@ -129,13 +131,14 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     return { status, unitsToOrder };
   };
 
-  // 1. Set by Bultos (multiplies by unitsPerBulto)
+  // 1. Set by Bultos (recalculates totalUnits if direct entry is not unlocked)
   const handleSetBultos = (id: string, newBultosVal: number) => {
     const bultos = Math.max(0, isNaN(newBultosVal) ? 0 : Math.floor(newBultosVal));
     setFormItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          const totalUnits = bultos * item.unitsPerBulto;
+          const isDirect = item.allowDirectTotal ?? false;
+          const totalUnits = isDirect ? item.totalUnits : bultos * item.unitsPerBulto;
           const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
 
           const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
@@ -146,7 +149,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
             ...item,
             bultos,
             totalUnits,
-            isDirectUnits: false,
             unitsToOrder,
             bultosToOrder,
             status,
@@ -158,13 +160,94 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     );
   };
 
-  // 2. Set by Total Units directly (for when there are no bultos or loose counts)
+  // 2. Set Units per Bulto (recalculates totalUnits if direct entry is not unlocked)
+  const handleSetUnitsPerBulto = (id: string, newUnitsVal: number) => {
+    const unitsPerBulto = Math.max(1, isNaN(newUnitsVal) ? 1 : Math.floor(newUnitsVal));
+    setFormItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const isDirect = item.allowDirectTotal ?? false;
+          const totalUnits = isDirect ? item.totalUnits : item.bultos * unitsPerBulto;
+          const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+
+          const bultosToOrder = unitsToOrder > 0 && unitsPerBulto > 0
+            ? Math.ceil(unitsToOrder / unitsPerBulto)
+            : 0;
+
+          return {
+            ...item,
+            unitsPerBulto,
+            totalUnits,
+            unitsToOrder,
+            bultosToOrder,
+            status,
+            lastUpdated: new Date().toISOString(),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  // 3. Toggle allow direct total entry per item (default is FALSE = locked)
+  const handleToggleAllowDirectTotal = (id: string) => {
+    setFormItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const current = item.allowDirectTotal ?? false;
+          const next = !current;
+          // If locking back, recalculate from bultos * unitsPerBulto
+          const totalUnits = next ? item.totalUnits : item.bultos * item.unitsPerBulto;
+          const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+
+          const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
+            ? Math.ceil(unitsToOrder / item.unitsPerBulto)
+            : 0;
+
+          return {
+            ...item,
+            allowDirectTotal: next,
+            isDirectUnits: next,
+            totalUnits,
+            unitsToOrder,
+            bultosToOrder,
+            status,
+            lastUpdated: new Date().toISOString(),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  // 4. Toggle allow direct total entry globally
+  const handleToggleAllDirectTotal = (enable: boolean) => {
+    setFormItems((prev) =>
+      prev.map((item) => {
+        const totalUnits = enable ? item.totalUnits : item.bultos * item.unitsPerBulto;
+        const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+        const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
+          ? Math.ceil(unitsToOrder / item.unitsPerBulto)
+          : 0;
+        return {
+          ...item,
+          allowDirectTotal: enable,
+          isDirectUnits: enable,
+          totalUnits,
+          unitsToOrder,
+          bultosToOrder,
+          status,
+        };
+      })
+    );
+  };
+
+  // 5. Set by Total Units directly (only when allowDirectTotal is enabled)
   const handleSetTotalUnitsDirect = (id: string, newTotalVal: number) => {
     const totalUnits = Math.max(0, isNaN(newTotalVal) ? 0 : Math.floor(newTotalVal));
     setFormItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          // Calculate approximate bultos for reference if unitsPerBulto > 0
           const approxBultos = item.unitsPerBulto > 0 ? Math.floor(totalUnits / item.unitsPerBulto) : 0;
           const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
 
@@ -388,6 +471,39 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
             className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
           />
         </div>
+
+        {/* Banner de Modo de Carga */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
+          <div className="flex items-center gap-2">
+            <span className="p-1 bg-indigo-100 text-indigo-700 rounded-md font-bold shrink-0">
+              <Boxes className="w-3.5 h-3.5 inline mr-1" />
+              Regla de Carga:
+            </span>
+            <span className="text-slate-600">
+              Cargas <strong>Bultos</strong> y <strong>Cant. x Bulto</strong>. Por defecto la <strong>Cantidad Total</strong> está bloqueada en cálculo automático.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => handleToggleAllDirectTotal(true)}
+              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Permite editar la cantidad total directamente en todos los materiales"
+            >
+              <Unlock className="w-3 h-3 text-amber-700" />
+              Habilitar Total Directo
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleAllDirectTotal(false)}
+              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Bloquea la cantidad total en todos y vuelve al cálculo automático Bultos × Unidades"
+            >
+              <Lock className="w-3 h-3 text-slate-600" />
+              Bloquear en Auto (Default)
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Products grouped by clear Category Sections */}
@@ -457,9 +573,9 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500 font-mono">
-                          <span>Unid. x bulto cerrado: <strong className="text-slate-700">{item.unitsPerBulto.toLocaleString('es-AR')} un.</strong></span>
+                          <span>Stock mínimo: <strong className="text-indigo-700">{item.minStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
                           <span className="text-slate-300">•</span>
-                          <span>Stock mínimo {selectedMonth.shortName}: <strong className="text-indigo-700">{item.minStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
+                          <span>Stock máximo: <strong className="text-slate-700">{item.maxStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
                         </div>
 
                         {item.notes && (
@@ -469,21 +585,22 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                         )}
                       </div>
 
-                      {/* Dual Input: Bultos Cerrados AND Direct Total Units */}
-                      <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
-                        {/* INPUT 1: BULTOS (with tactile stepper) */}
+                      {/* Triple Input System: Bultos + Cantidad por Bulto + Cantidad Total (Bloqueada por defecto) */}
+                      <div className="bg-slate-50/90 border border-slate-200 rounded-xl p-3 flex flex-wrap lg:flex-nowrap items-center gap-3 shrink-0">
+                        {/* 1. CANTIDAD DE BULTOS */}
                         <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                            <Boxes className="w-3 h-3 text-slate-400" /> Bultos Cerrados
+                          <span className="text-[10px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+                            <Boxes className="w-3 h-3 text-indigo-600" /> Cant. Bultos
                           </span>
                           <div className="flex items-center gap-1">
                             <button
+                              type="button"
                               onClick={() => handleStepBultos(item.id, -1)}
                               disabled={item.bultos <= 0}
-                              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-8 h-8 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
                               title="Restar 1 bulto"
                             >
-                              <Minus className="w-4 h-4" />
+                              <Minus className="w-3.5 h-3.5" />
                             </button>
 
                             <input
@@ -491,46 +608,111 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                               min="0"
                               value={item.bultos}
                               onChange={(e) => handleSetBultos(item.id, parseInt(e.target.value, 10))}
-                              className="w-16 h-10 text-center font-mono font-black text-base border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-900"
+                              className="w-14 h-8 text-center font-mono font-black text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-900"
                             />
 
                             <button
+                              type="button"
                               onClick={() => handleStepBultos(item.id, 1)}
-                              className="w-10 h-10 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
                               title="Sumar 1 bulto"
                             >
-                              <Plus className="w-4 h-4" />
+                              <Plus className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            (= {(item.bultos * item.unitsPerBulto).toLocaleString('es-AR')} un.)
-                          </span>
+                          <span className="text-[9px] text-slate-400 mt-0.5 font-medium">bultos cerrados</span>
                         </div>
 
-                        {/* Divider */}
-                        <div className="hidden sm:flex flex-col items-center justify-center px-1 text-slate-300 text-xs font-bold">
-                          <span>O</span>
+                        <div className="hidden sm:block text-slate-300 font-bold text-sm">×</div>
+
+                        {/* 2. CANTIDAD POR BULTO (EDITABLE) */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+                            <Package className="w-3 h-3 text-indigo-600" /> Cant. x Bulto
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.unitsPerBulto}
+                              onChange={(e) => handleSetUnitsPerBulto(item.id, parseInt(e.target.value, 10))}
+                              className="w-16 h-8 text-center font-mono font-bold text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-800"
+                              title="Unidades contenidas en cada bulto"
+                            />
+                            <span className="text-[11px] font-semibold text-slate-500">un.</span>
+                          </div>
+                          <span className="text-[9px] text-slate-400 mt-0.5 font-medium">por paquete</span>
                         </div>
 
-                        {/* INPUT 2: CANTIDAD TOTAL DIRECTA (si no hay bultos o hay unidades sueltas) */}
-                        <div className="flex flex-col items-center sm:items-start">
-                          <span className="text-[10px] font-bold text-indigo-900 uppercase mb-1 flex items-center gap-1">
-                            <Hash className="w-3 h-3 text-indigo-600" /> Cantidad Total (Unidades)
-                          </span>
-                          <div className="flex items-center gap-1.5">
+                        <div className="hidden sm:block text-slate-300 font-bold text-sm">=</div>
+
+                        {/* 3. CANTIDAD TOTAL (BLOQUEADA POR DEFECTO, HABILITABLE CON BOTÓN) */}
+                        <div className="flex flex-col items-center sm:items-start pl-1 sm:border-l border-slate-200">
+                          <div className="flex items-center justify-between w-full gap-1 mb-1">
+                            <span className="text-[10px] font-bold text-slate-800 uppercase flex items-center gap-1">
+                              <Hash className="w-3 h-3 text-indigo-600" /> Cantidad Total
+                            </span>
+                            {/* Botón para habilitar carga directa */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAllowDirectTotal(item.id)}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 transition-all cursor-pointer ${
+                                item.allowDirectTotal
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-xs'
+                                  : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                              }`}
+                              title={
+                                item.allowDirectTotal
+                                  ? 'Clic para volver a calcular el total automáticamente (Bultos × Unidades)'
+                                  : 'Clic para habilitar la carga manual de la cantidad total'
+                              }
+                            >
+                              {item.allowDirectTotal ? (
+                                <>
+                                  <Unlock className="w-2.5 h-2.5 text-amber-700" />
+                                  <span>Total Manual</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="w-2.5 h-2.5 text-slate-500" />
+                                  <span>Auto (Bloqueado)</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
                             <input
                               type="number"
                               min="0"
-                              step="50"
+                              disabled={!item.allowDirectTotal}
                               value={item.totalUnits}
                               onChange={(e) => handleSetTotalUnitsDirect(item.id, parseInt(e.target.value, 10))}
-                              className="w-28 h-10 px-2 text-right font-mono font-black text-base border-2 border-indigo-300 bg-indigo-50/40 text-indigo-950 rounded-xl focus:ring-2 focus:ring-indigo-600 outline-hidden"
+                              className={`w-24 h-8 px-2 text-right font-mono font-black text-sm rounded-lg border transition-all ${
+                                item.allowDirectTotal
+                                  ? 'bg-amber-50 border-amber-400 text-amber-950 focus:ring-2 focus:ring-amber-500 outline-hidden'
+                                  : 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed select-none opacity-90'
+                              }`}
+                              title={
+                                item.allowDirectTotal
+                                  ? 'Carga manual de unidades totales habilitada'
+                                  : 'Bloqueado: se calcula automáticamente como Bultos × Cant. por bulto. Pulsa el botón "Auto" para habilitar carga manual.'
+                              }
                             />
                             <span className="text-xs font-bold text-slate-500">un.</span>
                           </div>
-                          <span className="text-[10px] text-indigo-600 font-medium mt-0.5">
-                            Ingreso directo sin bultos
-                          </span>
+
+                          <div className="text-[9px] mt-0.5 font-medium">
+                            {item.allowDirectTotal ? (
+                              <span className="text-amber-700 font-semibold flex items-center gap-0.5">
+                                <Unlock className="w-2.5 h-2.5" /> Ingreso manual activo
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono">
+                                Cálculo: {item.bultos} × {item.unitsPerBulto}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

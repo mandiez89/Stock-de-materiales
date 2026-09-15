@@ -459,8 +459,8 @@ export function computeMaterialCalculations(
     minStockAdjusted = rawItem.monthlyMinMax[monthNumber].min;
     maxStockAdjusted = rawItem.monthlyMinMax[monthNumber].max;
   } else {
-    minStockAdjusted = Math.round(rawItem.minStockBase * monthFactor);
-    maxStockAdjusted = Math.round(rawItem.maxStockBase * monthFactor);
+    minStockAdjusted = rawItem.minStockBase;
+    maxStockAdjusted = rawItem.maxStockBase;
   }
 
   let status: MaterialItem['status'] = 'OPTIMO';

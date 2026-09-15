@@ -140,11 +140,11 @@ function updateStockSheet(items, metadata) {
   }
   
   // Headers
-  sheet.getRange("A1:K1").setValues([[
+  sheet.getRange("A1:L1").setValues([[
     "ID", "Categoría", "Material", "Bultos", "Unidades x Bulto", 
-    "Total Unidades", "Stock Mínimo", "Stock Máximo", "Estado", "Bultos a Pedir", "Proveedor"
+    "Total Unidades", "Stock Mínimo", "Stock Máximo", "Estado", "Unidades a Pedir", "Proveedor", "Fecha Actualización"
   ]]);
-  sheet.getRange("A1:K1").setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
+  sheet.getRange("A1:L1").setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
 
   const rows = items.map(function(item) {
     return [
@@ -157,31 +157,32 @@ function updateStockSheet(items, metadata) {
       item.minStockAdjusted,
       item.maxStockAdjusted,
       item.status,
-      item.bultosToOrder,
-      item.provider
+      item.unitsToOrder || 0,
+      item.provider,
+      new Date().toLocaleDateString("es-AR")
     ];
   });
 
   if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 11).setValues(rows);
+    sheet.getRange(2, 1, rows.length, 12).setValues(rows);
   }
   
   // Historial sheet
   let histSheet = ss.getSheetByName("Historial_Cargas");
   if (!histSheet) {
     histSheet = ss.insertSheet("Historial_Cargas");
-    histSheet.appendRow(["Fecha", "Responsable", "Mes", "Ítems Críticos", "Bultos a Pedir", "Notas"]);
+    histSheet.appendRow(["Fecha", "Responsable", "Mes", "Ítems Críticos", "Unidades a Pedir", "Notas"]);
     histSheet.getRange("A1:F1").setBackground("#0f172a").setFontColor("#ffffff").setFontWeight("bold");
   }
   
   if (metadata) {
     histSheet.appendRow([
       metadata.date || new Date().toLocaleDateString(),
-      metadata.responsible || "Vivi y Érica",
+      metadata.responsible || "Operador Depósito",
       metadata.month || "Mes actual",
       metadata.criticalCount || 0,
-      metadata.totalBultosToOrder || 0,
-      metadata.notes || "Carga desde interfaz web"
+      metadata.totalUnitsToOrder || 0,
+      metadata.notes || "Carga digital desde tablet"
     ]);
   }
   

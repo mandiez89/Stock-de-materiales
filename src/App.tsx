@@ -12,8 +12,8 @@ import { TabletStockEntry } from './components/TabletStockEntry';
 import { CurrentStockView } from './components/CurrentStockView';
 import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView';
 import { SheetsIntegrationView } from './components/SheetsIntegrationView';
-import { SeasonalSettingsView } from './components/SeasonalSettingsView';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
+import { syncWithGoogleSheets } from './services/sheetsSync';
 
 export default function App() {
   // Check URL parameter or hash for direct independent portal routing
@@ -141,27 +141,20 @@ export default function App() {
     );
   };
 
-  // Sync to Google Sheets via backend proxy
+  // Sync to Google Sheets via direct webhook / proxy
   const handleSyncWithSheets = async (
     itemsToSync: MaterialItem[],
     meta: { responsible: string; date: string; month: string }
   ): Promise<boolean> => {
     try {
       const webhookUrl = localStorage.getItem('sugestion_webhook_url') || '';
-      const response = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhookUrl,
-          payload: {
-            action: 'UPDATE_STOCK',
-            metadata: meta,
-            items: itemsToSync,
-          },
-        }),
+      const result = await syncWithGoogleSheets(webhookUrl, {
+        action: 'UPDATE_STOCK',
+        metadata: meta,
+        items: itemsToSync,
       });
-      const data = await response.json();
-      if (data.success) {
+
+      if (result.success) {
         setSheetsConnected(true);
         return true;
       }
@@ -176,19 +169,11 @@ export default function App() {
   const handleSyncMinMaxToSheets = async (updatedItems: MaterialItem[]): Promise<boolean> => {
     try {
       const webhookUrl = localStorage.getItem('sugestion_webhook_url') || '';
-      const response = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhookUrl,
-          payload: {
-            action: 'UPDATE_MIN_MAX',
-            minMaxMatrix: updatedItems,
-          },
-        }),
+      const result = await syncWithGoogleSheets(webhookUrl, {
+        action: 'UPDATE_MIN_MAX',
+        minMaxMatrix: updatedItems,
       });
-      const data = await response.json();
-      return !!data.success;
+      return !!result.success;
     } catch (e) {
       console.error('Error syncing min/max to sheets:', e);
       return false;
@@ -198,16 +183,6 @@ export default function App() {
   // Update items min/max matrix from ProductMonthlyMinMaxView
   const handleUpdateItemsMinMax = (updatedItems: MaterialItem[]) => {
     setRawItems(updatedItems);
-  };
-
-  const handleUpdateMonthFactor = (monthNum: number, newFactor: number) => {
-    setMonthlyFactors((prev) =>
-      prev.map((m) => (m.month === monthNum ? { ...m, factor: newFactor } : m))
-    );
-  };
-
-  const handleResetFactors = () => {
-    setMonthlyFactors(MONTHLY_FACTORS);
   };
 
   const handleExportCSV = () => {
@@ -291,17 +266,6 @@ export default function App() {
             items={computedItems}
             selectedMonth={selectedMonth}
             onSyncSuccess={() => setSheetsConnected(true)}
-          />
-        )}
-
-        {/* VIEW 6: Seasonal Rules & Factors (Admin Only) */}
-        {activeTab === 'seasonal' && userRole === 'admin' && (
-          <SeasonalSettingsView
-            monthlyFactors={monthlyFactors}
-            onUpdateMonthFactor={handleUpdateMonthFactor}
-            onResetFactors={handleResetFactors}
-            selectedMonth={selectedMonth}
-            items={computedItems}
           />
         )}
       </main>

@@ -17,6 +17,7 @@ export interface MaterialItem {
   unitsPerBulto: number;
   totalUnits: number;
   isDirectUnits?: boolean; // True if loaded directly in total units without bultos
+  allowDirectTotal?: boolean; // Controls whether user has explicitly unlocked direct total entry
   minStockBase: number;
   maxStockBase: number;
   // Specific min/max configured for each month (1 to 12) directly or via Google Sheets
