@@ -25,7 +25,6 @@ interface HeaderProps {
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
   selectedMonth: MonthlyFactor;
-  setSelectedMonthIndex: (index: number) => void;
   monthlyFactors: MonthlyFactor[];
   onExportCSV: () => void;
   onOpenPurchaseOrder: () => void;
@@ -40,7 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
   userRole,
   setUserRole,
   selectedMonth,
-  setSelectedMonthIndex,
   monthlyFactors,
   onExportCSV,
   onOpenPurchaseOrder,
@@ -102,20 +100,13 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right side controls */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Month Selector */}
-            <div className="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200">
+            {/* Current Month (Automatic) */}
+            <div className="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 shadow-xs">
               <Calendar className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
-              <select
-                value={selectedMonth.month - 1}
-                onChange={(e) => setSelectedMonthIndex(Number(e.target.value))}
-                className="bg-transparent text-white font-bold outline-hidden cursor-pointer text-xs"
-              >
-                {monthlyFactors.map((m, idx) => (
-                  <option key={m.month} value={idx} className="bg-slate-900 text-white">
-                    {m.name} ({m.seasonName})
-                  </option>
-                ))}
-              </select>
+              <span className="font-bold text-white text-xs">{selectedMonth.name}</span>
+              <span className="ml-1.5 text-[10px] bg-emerald-950 text-emerald-300 font-bold px-1.5 py-0.2 rounded border border-emerald-700/50">
+                Mes Actual
+              </span>
             </div>
 
             {/* Sheets connection status badge */}

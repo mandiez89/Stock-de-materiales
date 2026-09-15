@@ -49,9 +49,11 @@ export default function App() {
   // Monthly factors (can be customized by the user)
   const [monthlyFactors, setMonthlyFactors] = useState<MonthlyFactor[]>(MONTHLY_FACTORS);
   
-  // Selected month (defaulting to August, index 7, as in the user's paper sheet: 15-08-26)
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(7);
-  const selectedMonth = monthlyFactors[selectedMonthIndex] || monthlyFactors[0];
+  // Current month: ALWAYS automatically taken from system date (0 = Enero ... 11 = Diciembre)
+  const currentMonthIndex = useMemo(() => new Date().getMonth(), []);
+  const selectedMonth = useMemo(() => {
+    return monthlyFactors[currentMonthIndex] || monthlyFactors[0];
+  }, [monthlyFactors, currentMonthIndex]);
 
   // Raw items state (includes per-month min/max matrix for all 52 products)
   const [rawItems, setRawItems] = useState<MaterialItem[]>(() => {
@@ -234,7 +236,6 @@ export default function App() {
         userRole={userRole}
         setUserRole={setUserRole}
         selectedMonth={selectedMonth}
-        setSelectedMonthIndex={setSelectedMonthIndex}
         monthlyFactors={monthlyFactors}
         onExportCSV={handleExportCSV}
         onOpenPurchaseOrder={() => setIsPurchaseOrderOpen(true)}
@@ -300,7 +301,6 @@ export default function App() {
             onUpdateMonthFactor={handleUpdateMonthFactor}
             onResetFactors={handleResetFactors}
             selectedMonth={selectedMonth}
-            setSelectedMonthIndex={setSelectedMonthIndex}
             items={computedItems}
           />
         )}

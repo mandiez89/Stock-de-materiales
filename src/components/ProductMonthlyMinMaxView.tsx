@@ -31,7 +31,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
   onUpdateItemsMinMax,
   onSyncMinMaxToSheets,
 }) => {
-  const [selectedMonth, setSelectedMonth] = useState<number>(8); // Default August
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1); // Current month
   const [viewMode, setViewMode] = useState<'single_month' | 'full_year'>('single_month');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');

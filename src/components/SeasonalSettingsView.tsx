@@ -17,7 +17,6 @@ interface SeasonalSettingsViewProps {
   onUpdateMonthFactor: (month: number, newFactor: number) => void;
   onResetFactors: () => void;
   selectedMonth: MonthlyFactor;
-  setSelectedMonthIndex: (idx: number) => void;
   items: MaterialItem[];
 }
 
@@ -26,7 +25,6 @@ export const SeasonalSettingsView: React.FC<SeasonalSettingsViewProps> = ({
   onUpdateMonthFactor,
   onResetFactors,
   selectedMonth,
-  setSelectedMonthIndex,
   items,
 }) => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -70,19 +68,12 @@ export const SeasonalSettingsView: React.FC<SeasonalSettingsViewProps> = ({
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-              Simulación en Vivo para el Mes Seleccionado:
+              Simulación en Vivo para el Mes en Curso:
             </span>
-            <select
-              value={selectedMonth.month - 1}
-              onChange={(e) => setSelectedMonthIndex(Number(e.target.value))}
-              className="text-xs font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-md px-2.5 py-1 outline-hidden cursor-pointer"
-            >
-              {monthlyFactors.map((m, idx) => (
-                <option key={m.month} value={idx}>
-                  {m.name} ({m.factor.toFixed(2)}x - {m.seasonName})
-                </option>
-              ))}
-            </select>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-lg px-3 py-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{selectedMonth.name} ({selectedMonth.factor.toFixed(2)}x - {selectedMonth.seasonName})</span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
