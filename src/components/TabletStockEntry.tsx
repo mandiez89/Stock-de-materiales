@@ -1,27 +1,23 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Tablet, 
-  CheckCircle2, 
   RotateCcw, 
   SendHorizontal, 
   Search, 
-  Calendar, 
-  User, 
   Plus, 
   Minus, 
   Clock, 
   Wifi, 
-  Layers, 
   Boxes, 
   Hash, 
-  Check, 
   AlertCircle,
   Package,
-  FileSpreadsheet,
   Lock,
-  Unlock
+  Unlock,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
-import { MaterialItem, MaterialCategory, MonthlyFactor } from '../types';
+import { MaterialItem, MaterialCategory, MonthlyFactor, BultoBatch } from '../types';
 import confetti from 'canvas-confetti';
 
 interface TabletStockEntryProps {
@@ -70,32 +66,47 @@ const CATEGORY_STYLES: Record<MaterialCategory, { bg: string; text: string; bord
   }
 };
 
+// Ensure an item has valid batches
+function normalizeBatches(item: MaterialItem): BultoBatch[] {
+  if (item.batches && Array.isArray(item.batches) && item.batches.length > 0) {
+    return item.batches;
+  }
+  return [
+    {
+      id: `batch-${item.id}-1`,
+      bultos: item.bultos ?? 0,
+      unitsPerBulto: item.unitsPerBulto || 1,
+      label: 'Partida 1',
+    }
+  ];
+}
+
 export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   items,
   selectedMonth,
   onSaveBatch,
   onSyncWithSheets,
 }) => {
-  const [responsible, setResponsible] = useState(() => {
-    return localStorage.getItem('sugestion_tablet_responsible') || 'Operador Depósito';
-  });
-  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('Relevamiento físico de materias primas en tablet');
-  
   // Local form items (persisted to localStorage)
   const [formItems, setFormItems] = useState<MaterialItem[]>(() => {
-    const saved = localStorage.getItem('sugestion_tablet_draft_v3');
+    const saved = localStorage.getItem('sugestion_tablet_draft_v4');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((item: MaterialItem) => ({
+            ...item,
+            batches: normalizeBatches(item),
+          }));
         }
       } catch (e) {
         // ignore
       }
     }
-    return items;
+    return items.map((item) => ({
+      ...item,
+      batches: normalizeBatches(item),
+    }));
   });
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -105,12 +116,21 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
 
-  // Auto-save to localStorage on every change
+  // Sync to parent real-time without re-render loop
+  const onSaveBatchRef = useRef(onSaveBatch);
+  onSaveBatchRef.current = onSaveBatch;
+
+  // Auto-save to localStorage and parent real-time
   useEffect(() => {
-    localStorage.setItem('sugestion_tablet_draft_v3', JSON.stringify(formItems));
-    localStorage.setItem('sugestion_tablet_responsible', responsible);
+    localStorage.setItem('sugestion_tablet_draft_v4', JSON.stringify(formItems));
     setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-  }, [formItems, responsible]);
+    onSaveBatchRef.current(
+      formItems, 
+      'Operador en Planta', 
+      new Date().toISOString().split('T')[0], 
+      'Actualización en tiempo real por bultos'
+    );
+  }, [formItems]);
 
   // Recalculate status and units to order
   const computeItemStatus = (totalUnits: number, minStockAdjusted: number, maxStockAdjusted: number) => {
@@ -131,77 +151,154 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     return { status, unitsToOrder };
   };
 
-  // 1. Set by Bultos (recalculates totalUnits if direct entry is not unlocked)
-  const handleSetBultos = (id: string, newBultosVal: number) => {
-    const bultos = Math.max(0, isNaN(newBultosVal) ? 0 : Math.floor(newBultosVal));
+  // Helper to recompute totals from batches
+  const recalculateItemBatches = (item: MaterialItem, updatedBatches: BultoBatch[]): MaterialItem => {
+    const totalBultos = updatedBatches.reduce((acc, b) => acc + (b.bultos || 0), 0);
+    const calculatedUnits = updatedBatches.reduce((acc, b) => acc + ((b.bultos || 0) * (b.unitsPerBulto || 0)), 0);
+    const totalUnits = item.allowDirectTotal ? item.totalUnits : calculatedUnits;
+    
+    const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+    const primaryUnitsPerBulto = updatedBatches[0]?.unitsPerBulto || item.unitsPerBulto;
+    const bultosToOrder = unitsToOrder > 0 && primaryUnitsPerBulto > 0
+      ? Math.ceil(unitsToOrder / primaryUnitsPerBulto)
+      : 0;
+
+    // Check if order was delivered (stock increased past snapshot)
+    let isOrdered = item.isOrdered;
+    let orderedAt = item.orderedAt;
+    let orderedStockSnapshot = item.orderedStockSnapshot;
+    if (isOrdered && orderedStockSnapshot !== undefined && totalUnits > orderedStockSnapshot) {
+      isOrdered = false;
+      orderedAt = undefined;
+      orderedStockSnapshot = undefined;
+    }
+
+    return {
+      ...item,
+      batches: updatedBatches,
+      bultos: totalBultos,
+      unitsPerBulto: primaryUnitsPerBulto,
+      totalUnits,
+      status,
+      unitsToOrder,
+      bultosToOrder,
+      isOrdered,
+      orderedAt,
+      orderedStockSnapshot,
+      lastUpdated: new Date().toISOString(),
+    };
+  };
+
+  // Step bultos for a specific batch (Abrir o sumar bultos)
+  const handleStepBatchBultos = (itemId: string, batchId: string, delta: number) => {
     setFormItems((prev) =>
       prev.map((item) => {
-        if (item.id === id) {
-          const isDirect = item.allowDirectTotal ?? false;
-          const totalUnits = isDirect ? item.totalUnits : bultos * item.unitsPerBulto;
-          const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
-
-          const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
-            ? Math.ceil(unitsToOrder / item.unitsPerBulto)
-            : 0;
-
-          return {
-            ...item,
-            bultos,
-            totalUnits,
-            unitsToOrder,
-            bultosToOrder,
-            status,
-            lastUpdated: new Date().toISOString(),
-          };
+        if (item.id === itemId) {
+          const currentBatches = normalizeBatches(item);
+          const updatedBatches = currentBatches.map((b) => {
+            if (b.id === batchId) {
+              return {
+                ...b,
+                bultos: Math.max(0, (b.bultos || 0) + delta),
+              };
+            }
+            return b;
+          });
+          return recalculateItemBatches(item, updatedBatches);
         }
         return item;
       })
     );
   };
 
-  // 2. Set Units per Bulto (recalculates totalUnits if direct entry is not unlocked)
-  const handleSetUnitsPerBulto = (id: string, newUnitsVal: number) => {
-    const unitsPerBulto = Math.max(1, isNaN(newUnitsVal) ? 1 : Math.floor(newUnitsVal));
+  // Set explicit bultos count for a specific batch
+  const handleSetBatchBultos = (itemId: string, batchId: string, value: number) => {
+    const val = Math.max(0, isNaN(value) ? 0 : Math.floor(value));
     setFormItems((prev) =>
       prev.map((item) => {
-        if (item.id === id) {
-          const isDirect = item.allowDirectTotal ?? false;
-          const totalUnits = isDirect ? item.totalUnits : item.bultos * unitsPerBulto;
-          const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
-
-          const bultosToOrder = unitsToOrder > 0 && unitsPerBulto > 0
-            ? Math.ceil(unitsToOrder / unitsPerBulto)
-            : 0;
-
-          return {
-            ...item,
-            unitsPerBulto,
-            totalUnits,
-            unitsToOrder,
-            bultosToOrder,
-            status,
-            lastUpdated: new Date().toISOString(),
-          };
+        if (item.id === itemId) {
+          const currentBatches = normalizeBatches(item);
+          const updatedBatches = currentBatches.map((b) => {
+            if (b.id === batchId) {
+              return { ...b, bultos: val };
+            }
+            return b;
+          });
+          return recalculateItemBatches(item, updatedBatches);
         }
         return item;
       })
     );
   };
 
-  // 3. Toggle allow direct total entry per item (default is FALSE = locked)
+  // Set units per bulto for a specific batch
+  const handleSetBatchUnitsPerBulto = (itemId: string, batchId: string, value: number) => {
+    const val = Math.max(1, isNaN(value) ? 1 : Math.floor(value));
+    setFormItems((prev) =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          const currentBatches = normalizeBatches(item);
+          const updatedBatches = currentBatches.map((b) => {
+            if (b.id === batchId) {
+              return { ...b, unitsPerBulto: val };
+            }
+            return b;
+          });
+          return recalculateItemBatches(item, updatedBatches);
+        }
+        return item;
+      })
+    );
+  };
+
+  // Add extra batch line (e.g. 15 bultos de 85 unidades)
+  const handleAddBatch = (itemId: string) => {
+    setFormItems((prev) =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          const currentBatches = normalizeBatches(item);
+          const newBatch: BultoBatch = {
+            id: `batch-${item.id}-${Date.now()}`,
+            bultos: 0,
+            unitsPerBulto: currentBatches[0]?.unitsPerBulto || item.unitsPerBulto || 100,
+            label: `Partida ${currentBatches.length + 1}`,
+          };
+          const updatedBatches = [...currentBatches, newBatch];
+          return recalculateItemBatches(item, updatedBatches);
+        }
+        return item;
+      })
+    );
+  };
+
+  // Remove a batch line (if more than 1 batch)
+  const handleRemoveBatch = (itemId: string, batchId: string) => {
+    setFormItems((prev) =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          const currentBatches = normalizeBatches(item);
+          if (currentBatches.length <= 1) return item;
+          const updatedBatches = currentBatches.filter((b) => b.id !== batchId);
+          return recalculateItemBatches(item, updatedBatches);
+        }
+        return item;
+      })
+    );
+  };
+
+  // Toggle allow direct total entry per item (Manual vs Auto)
   const handleToggleAllowDirectTotal = (id: string) => {
     setFormItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          const current = item.allowDirectTotal ?? false;
-          const next = !current;
-          // If locking back, recalculate from bultos * unitsPerBulto
-          const totalUnits = next ? item.totalUnits : item.bultos * item.unitsPerBulto;
+          const next = !(item.allowDirectTotal ?? false);
+          const currentBatches = normalizeBatches(item);
+          const calculatedUnits = currentBatches.reduce((acc, b) => acc + (b.bultos * b.unitsPerBulto), 0);
+          const totalUnits = next ? item.totalUnits : calculatedUnits;
           const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
-
-          const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
-            ? Math.ceil(unitsToOrder / item.unitsPerBulto)
+          const primaryUnits = currentBatches[0]?.unitsPerBulto || item.unitsPerBulto;
+          const bultosToOrder = unitsToOrder > 0 && primaryUnits > 0
+            ? Math.ceil(unitsToOrder / primaryUnits)
             : 0;
 
           return {
@@ -220,39 +317,18 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     );
   };
 
-  // 4. Toggle allow direct total entry globally
-  const handleToggleAllDirectTotal = (enable: boolean) => {
-    setFormItems((prev) =>
-      prev.map((item) => {
-        const totalUnits = enable ? item.totalUnits : item.bultos * item.unitsPerBulto;
-        const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
-        const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
-          ? Math.ceil(unitsToOrder / item.unitsPerBulto)
-          : 0;
-        return {
-          ...item,
-          allowDirectTotal: enable,
-          isDirectUnits: enable,
-          totalUnits,
-          unitsToOrder,
-          bultosToOrder,
-          status,
-        };
-      })
-    );
-  };
-
-  // 5. Set by Total Units directly (only when allowDirectTotal is enabled)
+  // Set by Total Units directly (only when allowDirectTotal is enabled)
   const handleSetTotalUnitsDirect = (id: string, newTotalVal: number) => {
     const totalUnits = Math.max(0, isNaN(newTotalVal) ? 0 : Math.floor(newTotalVal));
     setFormItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          const approxBultos = item.unitsPerBulto > 0 ? Math.floor(totalUnits / item.unitsPerBulto) : 0;
+          const currentBatches = normalizeBatches(item);
+          const primaryUnits = currentBatches[0]?.unitsPerBulto || item.unitsPerBulto || 1;
+          const approxBultos = Math.floor(totalUnits / primaryUnits);
           const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
-
-          const bultosToOrder = unitsToOrder > 0 && item.unitsPerBulto > 0
-            ? Math.ceil(unitsToOrder / item.unitsPerBulto)
+          const bultosToOrder = unitsToOrder > 0 && primaryUnits > 0
+            ? Math.ceil(unitsToOrder / primaryUnits)
             : 0;
 
           return {
@@ -271,12 +347,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     );
   };
 
-  const handleStepBultos = (id: string, delta: number) => {
-    const current = formItems.find((i) => i.id === id);
-    if (!current) return;
-    handleSetBultos(id, current.bultos + delta);
-  };
-
   // Categories list
   const categoriesList: { id: string; label: string; count: number; icon: string }[] = [
     { id: 'all', label: 'Todos los Tipos', count: formItems.length, icon: '📋' },
@@ -287,7 +357,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     { id: 'Cartones', label: '5. Cartones', count: formItems.filter((i) => i.category === 'Cartones').length, icon: '📋' },
   ];
 
-  // Grouped items by category for clear presentation
   const groupedCategories: MaterialCategory[] = ['Cajas', 'Celofanes', 'Bolsitas', 'Caballetes', 'Cartones'];
 
   const filteredCategories = useMemo(() => {
@@ -297,39 +366,47 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     return groupedCategories.filter((c) => c === activeCategory);
   }, [activeCategory]);
 
-  // Counting metrics
-  const totalBultosCounted = formItems.reduce((acc, i) => acc + i.bultos, 0);
-  const totalUnitsCounted = formItems.reduce((acc, i) => acc + i.totalUnits, 0);
-  const itemsWithStock = formItems.filter((i) => i.totalUnits > 0).length;
+  // Overall totals
+  const totalUnitsCounted = useMemo(() => {
+    return formItems.reduce((acc, item) => acc + (item.totalUnits || 0), 0);
+  }, [formItems]);
 
+  const totalBultosCounted = useMemo(() => {
+    return formItems.reduce((acc, item) => acc + (item.bultos || 0), 0);
+  }, [formItems]);
+
+  // Reset draft to initial items
   const handleResetDraft = () => {
-    if (window.confirm('¿Deseas reiniciar los valores ingresados en la tablet a los valores base?')) {
-      setFormItems(items);
-      localStorage.removeItem('sugestion_tablet_draft_v3');
+    if (window.confirm('¿Deseas reiniciar el stock a los valores originales iniciales?')) {
+      const reset = items.map((i) => ({ ...i, batches: normalizeBatches(i) }));
+      setFormItems(reset);
+      localStorage.removeItem('sugestion_tablet_draft_v4');
+      setSyncSuccessMessage('Se han restaurado los valores iniciales.');
+      setTimeout(() => setSyncSuccessMessage(null), 3000);
     }
   };
 
+  // Finish and Sync with Google Sheets
   const handleFinishAndSync = async () => {
     setIsSyncing(true);
     setSyncSuccessMessage(null);
     setSyncErrorMessage(null);
 
-    // Save to parent state
-    onSaveBatch(formItems, responsible, entryDate, notes);
-
     try {
       const success = await onSyncWithSheets(formItems, {
-        responsible,
-        date: entryDate,
+        responsible: 'Operador Depósito',
+        date: new Date().toISOString().split('T')[0],
         month: selectedMonth.name,
       });
 
       if (success) {
-        setSyncSuccessMessage(`¡Conteo de ${formItems.length} materiales enviado y guardado con éxito en Google Sheets!`);
-        confetti({ particleCount: 80, spread: 80, origin: { y: 0.6 } });
+        setSyncSuccessMessage(
+          `¡Sincronizado con éxito en Google Sheets! Se registraron ${totalUnitsCounted.toLocaleString('es-AR')} unidades (${totalBultosCounted.toLocaleString('es-AR')} bultos).`
+        );
+        confetti({ particleCount: 70, spread: 80, origin: { y: 0.8 } });
         setTimeout(() => setSyncSuccessMessage(null), 6000);
       } else {
-        setSyncErrorMessage('Los datos se guardaron en la tablet pero no se pudo conectar con Google Sheets. Verifica la conexión.');
+        setSyncErrorMessage('Los datos se guardaron en la tablet pero no se pudo conectar con Google Sheets. Revisa la URL del Webhook.');
       }
     } catch (err: any) {
       setSyncErrorMessage(`Error de conexión: ${err.message || 'Sin respuesta'}`);
@@ -339,26 +416,28 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   };
 
   return (
-    <div className="space-y-5 pb-20 max-w-6xl mx-auto px-2 sm:px-4">
-      {/* Clean Header Bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+    <div className="space-y-4 pb-24 max-w-6xl mx-auto px-2 sm:px-4">
+      {/* Clean Real-Time Header Bar (Operador y Fecha eliminados para flujo en tiempo real) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center shrink-0">
               <Tablet className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Planilla de Carga de Stock</h2>
-                <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                  <Wifi className="w-3 h-3 text-emerald-600" /> Memoria Offline Activa
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                  Control de Bultos y Stock en Tiempo Real
+                </h2>
+                <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Tiempo Real Activo
                 </span>
-                <span className="text-xs font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                  Mes: {selectedMonth.name} ({itemsWithStock} de {formItems.length} contados)
+                <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <Wifi className="w-3 h-3 text-emerald-600" /> Memoria Local
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Contá los bultos cerrados o activá <strong>Total Manual</strong> si tenés paquetes abiertos o unidades sueltas.
+                Al empaquetar, descontá con <strong>-1</strong> el bulto abierto. Si recibís mercadería o hay distintas medidas, agregá una línea de partida.
               </p>
             </div>
           </div>
@@ -366,67 +445,39 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{lastSavedTime ? `Guardado: ${lastSavedTime}` : 'Autoguardado local'}</span>
+              <span>{lastSavedTime ? `Autoguardado: ${lastSavedTime}` : 'En vivo'}</span>
             </div>
             <button
               onClick={handleResetDraft}
               className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg text-xs font-semibold transition-colors cursor-pointer border border-slate-200 flex items-center gap-1.5 active:scale-95"
-              title="Restaurar conteo"
+              title="Restaurar valores de stock"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reiniciar</span>
+              <span>Restaurar</span>
             </button>
-          </div>
-        </div>
-
-        {/* Responsible & Date Bar - Clean & Compact */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <label className="text-xs font-bold text-slate-600 shrink-0 flex items-center gap-1.5">
-              <User className="w-4 h-4 text-slate-400" /> Operador:
-            </label>
-            <input
-              type="text"
-              value={responsible}
-              onChange={(e) => setResponsible(e.target.value)}
-              placeholder="Nombre del operador..."
-              className="flex-1 h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold text-sm focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-hidden"
-            />
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <label className="text-xs font-bold text-slate-600 shrink-0 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-slate-400" /> Fecha:
-            </label>
-            <input
-              type="date"
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              className="flex-1 h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold text-sm focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-hidden"
-            />
           </div>
         </div>
       </div>
 
       {/* Sync Status Feedback */}
       {syncSuccessMessage && (
-        <div className="p-3.5 sm:p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 text-xs sm:text-sm flex items-center gap-3 shadow-xs animate-fade-in font-bold">
+        <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 text-xs sm:text-sm flex items-center gap-3 shadow-xs font-bold animate-fade-in">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
           <div className="flex-1">{syncSuccessMessage}</div>
         </div>
       )}
 
       {syncErrorMessage && (
-        <div className="p-3.5 sm:p-4 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs sm:text-sm flex items-center gap-3 shadow-xs font-bold">
+        <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs sm:text-sm flex items-center gap-3 shadow-xs font-bold">
           <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
           <div className="flex-1">{syncErrorMessage}</div>
         </div>
       )}
 
-      {/* Category Filter Bar (Tipo de material) */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+      {/* Category Filter Bar (Tipo de material) & Search */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs space-y-3">
         <div>
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
             Filtrar por tipo de material:
           </span>
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -436,16 +487,16 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`h-10 sm:h-11 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer shrink-0 active:scale-95 ${
+                  className={`h-9 sm:h-10 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95 ${
                     isSelected
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
                   }`}
                 >
-                  <span className="text-base">{cat.icon}</span>
+                  <span>{cat.icon}</span>
                   <span>{cat.label}</span>
                   <span
-                    className={`text-[11px] font-mono px-1.5 py-0.5 rounded-full font-bold ${
+                    className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
                       isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'
                     }`}
                   >
@@ -459,49 +510,19 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
 
         {/* Quick Search */}
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
+            placeholder="Buscar material rápidamente (ej: Cajas 5 cm, Celofán 15x20...)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar material o código (ej: 8100, bombachas, plantines, celofán)..."
-            className="w-full h-10 sm:h-11 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-hidden font-medium"
+            className="w-full h-10 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition-all shadow-2xs"
           />
-        </div>
-
-        {/* Banner de Modo de Carga - Clean & Inline */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100 text-xs text-slate-600">
-          <div className="flex items-center gap-2">
-            <Boxes className="w-4 h-4 text-indigo-600 shrink-0" />
-            <span className="leading-snug">
-              Cargá <strong>Bultos</strong> con <strong>+ / -</strong>. El total se calcula automáticamente salvo que actives <strong>Total Manual</strong>.
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => handleToggleAllDirectTotal(true)}
-              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-              title="Permite editar la cantidad total directamente en todos los materiales"
-            >
-              <Unlock className="w-3 h-3 text-amber-700" />
-              <span>Habilitar Total Directo</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleAllDirectTotal(false)}
-              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-              title="Bloquea la cantidad total en todos y vuelve al cálculo automático Bultos × Unidades"
-            >
-              <Lock className="w-3 h-3 text-slate-500" />
-              <span>Auto</span>
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Products grouped by clear Category Sections */}
-      <div className="space-y-6">
+      {/* Product List Grouped by Category */}
+      <div className="space-y-5">
         {filteredCategories.map((category) => {
           const categoryStyle = CATEGORY_STYLES[category];
           const categoryItems = formItems.filter(
@@ -514,214 +535,242 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           if (categoryItems.length === 0) return null;
 
           return (
-            <div key={category} className="space-y-3">
+            <div key={category} className="space-y-2.5">
               {/* Category Section Header */}
-              <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border ${categoryStyle.bg} ${categoryStyle.border}`}>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl sm:text-2xl">{categoryStyle.icon}</span>
-                  <h3 className={`font-bold text-sm sm:text-base uppercase tracking-wide ${categoryStyle.text}`}>
+              <div className={`flex items-center justify-between px-3.5 py-2 rounded-xl border ${categoryStyle.bg} ${categoryStyle.border}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{categoryStyle.icon}</span>
+                  <h3 className={`font-bold text-xs sm:text-sm uppercase tracking-wide ${categoryStyle.text}`}>
                     {categoryStyle.title}
                   </h3>
                 </div>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/90 border ${categoryStyle.border} ${categoryStyle.text}`}>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full bg-white border ${categoryStyle.border} ${categoryStyle.text}`}>
                   {categoryItems.length} materiales
                 </span>
               </div>
 
-              {/* Items in this category */}
-              <div className="space-y-2.5">
+              {/* Items in this category - Compact & Tactile */}
+              <div className="space-y-2">
                 {categoryItems.map((item) => {
                   const isZero = item.totalUnits === 0;
-                  const isCritical = item.status === 'CRITICO';
+                  const batches = normalizeBatches(item);
+                  const hasMultipleBatches = batches.length > 1;
 
                   return (
                     <div
                       key={item.id}
-                      className={`bg-white border rounded-2xl p-4 shadow-xs transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 ${
+                      className={`bg-white border rounded-xl p-3 sm:p-3.5 shadow-2xs transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
                         isZero
-                          ? 'border-slate-200 hover:border-slate-300'
-                          : isCritical
-                          ? 'border-amber-300 bg-amber-50/15'
-                          : 'border-emerald-300 bg-emerald-50/10'
+                          ? 'border-slate-200 bg-slate-50/40'
+                          : 'border-slate-200 hover:border-indigo-200'
                       }`}
                     >
-                      {/* Product description & info */}
-                      <div className="flex-1 min-w-0">
+                      {/* Left: Material Name and Stock Total Display (SIN mínimos, máximos ni estado 'Contado') */}
+                      <div className="min-w-[240px] flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border uppercase ${categoryStyle.bg} ${categoryStyle.text} ${categoryStyle.border}`}>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border uppercase ${categoryStyle.bg} ${categoryStyle.text} ${categoryStyle.border}`}>
                             {item.category}
                           </span>
-                          <h4 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug">
+                          <h4 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
                             {item.name}
                           </h4>
-                          {isZero ? (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                          {isZero && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200">
                               Sin Stock (0 un.)
                             </span>
-                          ) : (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Contado
-                            </span>
                           )}
-                          {item.isDirectUnits && (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200">
-                              Carga Directa
+                          {item.allowDirectTotal && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1">
+                              <Unlock className="w-2.5 h-2.5" /> Total Manual
                             </span>
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-slate-600 font-medium">
-                          <span>Mínimo: <strong className="text-indigo-700 font-bold">{item.minStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
+                        {/* Summary of Total Stock */}
+                        <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
+                          <span className="text-xs text-slate-500 font-medium">Stock Total:</span>
+                          <span className="font-mono font-black text-slate-900 text-base sm:text-lg">
+                            {item.totalUnits.toLocaleString('es-AR')}
+                          </span>
+                          <span className="text-xs font-bold text-indigo-700">unidades</span>
                           <span className="text-slate-300">•</span>
-                          <span>Máximo: <strong className="text-slate-800 font-bold">{item.maxStockAdjusted.toLocaleString('es-AR')} un.</strong></span>
+                          <span className="font-mono text-xs font-bold text-slate-700">
+                            {item.bultos} {item.bultos === 1 ? 'bulto' : 'bultos'}
+                          </span>
                         </div>
+
+                        {/* Breakdown pills if multiple batches */}
+                        {hasMultipleBatches && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {batches.map((b, idx) => (
+                              <span
+                                key={b.id}
+                                className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200"
+                              >
+                                #{idx + 1}: {b.bultos} btos × {b.unitsPerBulto} = {(b.bultos * b.unitsPerBulto).toLocaleString('es-AR')} un.
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {item.notes && (
-                          <p className="text-xs text-slate-500 font-normal mt-1">
+                          <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
                             {item.notes}
                           </p>
                         )}
                       </div>
 
-                      {/* Triple Input System: Bultos + Cantidad por Bulto + Cantidad Total */}
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5 flex flex-wrap lg:flex-nowrap items-center gap-3 sm:gap-4 shrink-0">
-                        {/* 1. CANTIDAD DE BULTOS */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[11px] font-bold text-slate-700 uppercase mb-1 flex items-center gap-1">
-                            <Boxes className="w-3.5 h-3.5 text-indigo-600" /> Bultos
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            {/* Botón Menos */}
-                            <button
-                              type="button"
-                              onClick={() => handleStepBultos(item.id, -1)}
-                              disabled={item.bultos <= 0}
-                              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed text-slate-900 font-bold text-lg flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                              title="Restar 1 bulto"
+                      {/* Right: Bulto Lines (Partidas) with Quick Abrir/Restar/Sumar Buttons */}
+                      <div className="flex flex-col gap-2 shrink-0 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                        {batches.map((batch, batchIndex) => {
+                          const batchSubtotal = (batch.bultos || 0) * (batch.unitsPerBulto || 0);
+
+                          return (
+                            <div
+                              key={batch.id}
+                              className="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-1.5 shadow-2xs"
                             >
-                              <Minus className="w-5 h-5 stroke-[2.5]" />
-                            </button>
-
-                            {/* Input Bultos */}
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.bultos}
-                              onChange={(e) => handleSetBultos(item.id, parseInt(e.target.value, 10))}
-                              className="w-16 sm:w-18 h-10 sm:h-11 text-center font-mono font-bold text-lg sm:text-xl border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-900 shadow-xs"
-                            />
-
-                            {/* Botón Más (+1) */}
-                            <button
-                              type="button"
-                              onClick={() => handleStepBultos(item.id, 1)}
-                              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-lg flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                              title="Sumar 1 bulto"
-                            >
-                              <Plus className="w-5 h-5 stroke-[2.5]" />
-                            </button>
-
-                            {/* Botón Rápido +5 */}
-                            <button
-                              type="button"
-                              onClick={() => handleStepBultos(item.id, 5)}
-                              className="h-10 sm:h-11 px-2.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                              title="Sumar 5 bultos rápidamente"
-                            >
-                              +5
-                            </button>
-                          </div>
-                          <span className="text-[10px] text-slate-500 font-medium mt-1">bultos cerrados</span>
-                        </div>
-
-                        <div className="hidden sm:block text-slate-400 font-bold text-lg">×</div>
-
-                        {/* 2. CANTIDAD POR BULTO (EDITABLE) */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[11px] font-bold text-slate-700 uppercase mb-1 flex items-center gap-1">
-                            <Package className="w-3.5 h-3.5 text-indigo-600" /> Cant. x Bulto
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.unitsPerBulto}
-                              onChange={(e) => handleSetUnitsPerBulto(item.id, parseInt(e.target.value, 10))}
-                              className="w-20 sm:w-24 h-10 sm:h-11 text-center font-mono font-bold text-base sm:text-lg border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-800 shadow-xs"
-                              title="Unidades contenidas en cada bulto"
-                            />
-                            <span className="text-xs font-bold text-slate-500">un.</span>
-                          </div>
-                          <span className="text-[10px] text-slate-500 font-medium mt-1">por paquete</span>
-                        </div>
-
-                        <div className="hidden sm:block text-slate-400 font-bold text-lg">=</div>
-
-                        {/* 3. CANTIDAD TOTAL */}
-                        <div className="flex flex-col items-center sm:items-start pl-1 sm:border-l border-slate-200">
-                          <div className="flex items-center justify-between w-full gap-2 mb-1">
-                            <span className="text-[11px] font-bold text-slate-800 uppercase flex items-center gap-1">
-                              <Hash className="w-3.5 h-3.5 text-indigo-600" /> Total Unidades
-                            </span>
-                            {/* Botón para habilitar carga directa */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleAllowDirectTotal(item.id)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer active:scale-95 border ${
-                                item.allowDirectTotal
-                                  ? 'bg-amber-100 text-amber-950 border-amber-400 shadow-xs'
-                                  : 'bg-slate-200 hover:bg-slate-300 text-slate-700 border-slate-300'
-                              }`}
-                              title={
-                                item.allowDirectTotal
-                                  ? 'Clic para volver a calcular el total automáticamente (Bultos × Unidades)'
-                                  : 'Clic para habilitar la carga manual de la cantidad total'
-                              }
-                            >
-                              {item.allowDirectTotal ? (
-                                <>
-                                  <Unlock className="w-3 h-3 text-amber-800" />
-                                  <span>Manual</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Lock className="w-3 h-3 text-slate-600" />
-                                  <span>Auto</span>
-                                </>
+                              {/* Batch index label */}
+                              {hasMultipleBatches && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                                  #{batchIndex + 1}
+                                </span>
                               )}
-                            </button>
-                          </div>
 
-                          <div className="flex items-center gap-1.5 w-full">
-                            <input
-                              type="number"
-                              min="0"
-                              disabled={!item.allowDirectTotal}
-                              value={item.totalUnits}
-                              onChange={(e) => handleSetTotalUnitsDirect(item.id, parseInt(e.target.value, 10))}
-                              className={`w-full sm:w-36 h-10 sm:h-11 px-2.5 text-right font-mono font-black text-lg sm:text-xl rounded-xl border transition-all ${
-                                item.allowDirectTotal
-                                  ? 'bg-amber-50 border-amber-400 text-amber-950 focus:ring-2 focus:ring-amber-500 outline-hidden'
-                                  : 'bg-indigo-50/70 border-indigo-200 text-indigo-950 cursor-not-allowed select-none'
-                              }`}
-                              title={
-                                item.allowDirectTotal
-                                  ? 'Carga manual de unidades totales habilitada'
-                                  : 'Bloqueado: se calcula automáticamente como Bultos × Cant. por bulto.'
-                              }
-                            />
-                            <span className="text-xs font-bold text-slate-500">un.</span>
-                          </div>
+                              {/* Bultos Controls: Minus, Input, Plus */}
+                              <div className="flex items-center gap-1">
+                                {/* Botón ABRIR BULTO (Restar 1) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepBatchBultos(item.id, batch.id, -1)}
+                                  disabled={batch.bultos <= 0}
+                                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100 active:bg-rose-200 disabled:opacity-25 disabled:cursor-not-allowed text-rose-700 font-black text-base flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-2xs"
+                                  title="Abrir 1 bulto (descontar del stock)"
+                                >
+                                  <Minus className="w-4 h-4 stroke-[3]" />
+                                </button>
 
-                          <div className="text-[10px] mt-1 font-semibold">
+                                {/* Input Bultos */}
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={batch.bultos}
+                                    onChange={(e) =>
+                                      handleSetBatchBultos(item.id, batch.id, parseInt(e.target.value, 10))
+                                    }
+                                    className="w-14 sm:w-16 h-8 sm:h-9 text-center font-mono font-bold text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-900 shadow-2xs"
+                                    title="Cantidad de bultos cerrados"
+                                  />
+                                </div>
+
+                                {/* Botón Sumar 1 */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepBatchBultos(item.id, batch.id, 1)}
+                                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-black text-base flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-2xs"
+                                  title="Ingresar / Sumar 1 bulto"
+                                >
+                                  <Plus className="w-4 h-4 stroke-[3]" />
+                                </button>
+
+                                {/* Botón Rápido +5 */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepBatchBultos(item.id, batch.id, 5)}
+                                  className="h-8 sm:h-9 px-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 border border-slate-200 rounded-lg font-bold text-xs flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                                  title="Sumar 5 bultos rápidamente"
+                                >
+                                  +5
+                                </button>
+                              </div>
+
+                              <span className="text-slate-400 font-bold text-xs px-0.5">×</span>
+
+                              {/* Cantidad x Bulto (Editable) */}
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={batch.unitsPerBulto}
+                                  onChange={(e) =>
+                                    handleSetBatchUnitsPerBulto(item.id, batch.id, parseInt(e.target.value, 10))
+                                  }
+                                  className="w-16 sm:w-20 h-8 sm:h-9 text-center font-mono font-bold text-xs sm:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white text-slate-800 shadow-2xs"
+                                  title="Unidades por bulto en esta partida"
+                                />
+                                <span className="text-[10px] font-bold text-slate-500">un/bto</span>
+                              </div>
+
+                              <span className="text-slate-400 font-bold text-xs px-0.5">=</span>
+
+                              {/* Subtotal Partida */}
+                              <div className="min-w-[70px] text-right">
+                                <span className="font-mono font-bold text-xs sm:text-sm text-slate-800">
+                                  {batchSubtotal.toLocaleString('es-AR')}
+                                </span>
+                                <span className="text-[9px] text-slate-400 block font-normal">unidades</span>
+                              </div>
+
+                              {/* Delete batch button (only if >1 batch) */}
+                              {hasMultipleBatches && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveBatch(item.id, batch.id)}
+                                  className="w-7 h-7 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                                  title="Eliminar esta línea de bultos"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Extra Actions: + Agregar otra cantidad de bultos / Total Manual */}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
+                          {/* Botón para agregar línea extra (ej: 15 de 85 un.) */}
+                          <button
+                            type="button"
+                            onClick={() => handleAddBatch(item.id)}
+                            className="text-[11px] font-bold text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-lg border border-dashed border-indigo-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                            title="Cargar otra partida si hay bultos de diferente cantidad (ej: 30 de 65 un. y 15 de 85 un.)"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>+ Otra medida de bulto</span>
+                          </button>
+
+                          {/* Toggle Total Manual */}
+                          <div className="flex items-center gap-1.5">
                             {item.allowDirectTotal ? (
-                              <span className="text-amber-800 flex items-center gap-1">
-                                <Unlock className="w-3 h-3" /> Manual activo
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={item.totalUnits}
+                                  onChange={(e) => handleSetTotalUnitsDirect(item.id, parseInt(e.target.value, 10))}
+                                  className="w-20 h-7 text-right font-mono font-bold text-xs bg-amber-50 border border-amber-400 rounded-md px-1 text-amber-950"
+                                  title="Unidades sueltas totales"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAllowDirectTotal(item.id)}
+                                  className="text-[10px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-1.5 py-0.5 rounded cursor-pointer"
+                                  title="Volver a cálculo automático por bultos"
+                                >
+                                  Auto
+                                </button>
+                              </div>
                             ) : (
-                              <span className="text-slate-400 font-mono">
-                                {item.bultos} bultos × {item.unitsPerBulto}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAllowDirectTotal(item.id)}
+                                className="text-[10px] font-medium text-slate-500 hover:text-slate-800 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-200 transition-colors cursor-pointer"
+                                title="Habilitar ingreso de total manual si hay unidades sueltas"
+                              >
+                                <Lock className="w-2.5 h-2.5" />
+                                <span>Unidades sueltas</span>
+                              </button>
                             )}
                           </div>
                         </div>
@@ -742,10 +791,10 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
             <div>
               <p className="font-bold text-white text-xs sm:text-sm">
-                Total: <span className="text-emerald-300 font-mono font-black text-sm sm:text-base">{totalUnitsCounted.toLocaleString('es-AR')}</span> un. ({totalBultosCounted.toLocaleString('es-AR')} bultos)
+                Stock Total: <span className="text-emerald-300 font-mono font-black text-sm sm:text-base">{totalUnitsCounted.toLocaleString('es-AR')}</span> un. ({totalBultosCounted.toLocaleString('es-AR')} bultos)
               </p>
-              <p className="text-slate-400 text-[11px] font-normal">
-                {responsible || 'Operador'} • {entryDate} • {selectedMonth.name}
+              <p className="text-slate-400 text-[10px] font-normal">
+                Sincronización en tiempo real • {selectedMonth.name}
               </p>
             </div>
           </div>
@@ -753,7 +802,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           <button
             onClick={handleFinishAndSync}
             disabled={isSyncing}
-            className="w-full sm:w-auto h-10 sm:h-11 px-5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer tracking-tight active:scale-95 shrink-0"
+            className="w-full sm:w-auto h-10 px-5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer tracking-tight active:scale-95 shrink-0"
           >
             {isSyncing ? (
               <>

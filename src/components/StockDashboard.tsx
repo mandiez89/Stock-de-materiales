@@ -8,15 +8,21 @@ import {
   ShoppingBag, 
   Layers, 
   Plus,
-  Minus
+  Minus,
+  Truck,
+  Check,
+  X,
+  Copy
 } from 'lucide-react';
-import { MaterialItem, MaterialCategory, MonthlyFactor } from '../types';
+import { MaterialItem, MonthlyFactor } from '../types';
+import { formatSingleOrderItemText } from '../utils/orderFormat';
 
 interface StockDashboardProps {
   items: MaterialItem[];
   selectedMonth: MonthlyFactor;
   onUpdateBultos: (id: string, newBultos: number) => void;
   onOpenPurchaseOrder: () => void;
+  onToggleOrdered?: (id: string, isOrdered: boolean) => void;
 }
 
 export const StockDashboard: React.FC<StockDashboardProps> = ({
@@ -24,24 +30,58 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
   selectedMonth,
   onUpdateBultos,
   onOpenPurchaseOrder,
+  onToggleOrdered,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
 
-  // Statistics
+  const handleCopySingleItem = (item: MaterialItem) => {
+    const text = formatSingleOrderItemText(item);
+    navigator.clipboard.writeText(text);
+    setCopiedItemId(item.id);
+    setTimeout(() => setCopiedItemId(null), 2500);
+  };
+
+  // Categorize items with order state awareness
   const totalCount = items.length;
-  const criticalItems = useMemo(() => items.filter((i) => i.status === 'CRITICO'), [items]);
-  const reorderItems = useMemo(() => items.filter((i) => i.status === 'PEDIR'), [items]);
-  const optimalItems = useMemo(() => items.filter((i) => i.status === 'OPTIMO'), [items]);
-  const overstockItems = useMemo(() => items.filter((i) => i.status === 'SOBRESTOCK'), [items]);
 
-  const totalUnitsToOrder = useMemo(
-    () => items.reduce((acc, i) => acc + i.unitsToOrder, 0),
+  // Ordered items
+  const orderedItems = useMemo(() => items.filter((i) => i.isOrdered), [items]);
+
+  // Critical items that have NOT been ordered yet
+  const criticalUnordered = useMemo(
+    () => items.filter((i) => !i.isOrdered && i.status === 'CRITICO'),
     [items]
   );
+
+  // Items that ARE ordered, but have extremely low or critical stock (Alert!)
+  const criticalWhileOrdered = useMemo(
+    () => items.filter((i) => i.isOrdered && (i.status === 'CRITICO' || i.totalUnits <= i.minStockAdjusted * 0.3)),
+    [items]
+  );
+
+  // Reorder items that have NOT been ordered yet
+  const reorderUnordered = useMemo(
+    () => items.filter((i) => !i.isOrdered && i.status === 'PEDIR'),
+    [items]
+  );
+
+  // Optimal items
+  const optimalItems = useMemo(() => items.filter((i) => i.status === 'OPTIMO'), [items]);
+
+  // Overstock items
+  const overstockItems = useMemo(() => items.filter((i) => i.status === 'SOBRESTOCK'), [items]);
+
+  // Units that ACTUALLY need ordering (excluding already placed orders)
+  const totalUnitsToOrder = useMemo(
+    () => items.filter((i) => !i.isOrdered).reduce((acc, i) => acc + i.unitsToOrder, 0),
+    [items]
+  );
+
   const itemsToOrderCount = useMemo(
-    () => items.filter((i) => i.unitsToOrder > 0).length,
+    () => items.filter((i) => !i.isOrdered && i.unitsToOrder > 0).length,
     [items]
   );
 
@@ -57,7 +97,18 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
 
       // Status
-      const matchesStatus = selectedStatus === 'all' || item.status === selectedStatus;
+      let matchesStatus = true;
+      if (selectedStatus === 'CRITICO') {
+        matchesStatus = !item.isOrdered && item.status === 'CRITICO';
+      } else if (selectedStatus === 'PEDIR') {
+        matchesStatus = !item.isOrdered && item.status === 'PEDIR';
+      } else if (selectedStatus === 'ORDERED') {
+        matchesStatus = !!item.isOrdered;
+      } else if (selectedStatus === 'OPTIMO') {
+        matchesStatus = item.status === 'OPTIMO';
+      } else if (selectedStatus === 'SOBRESTOCK') {
+        matchesStatus = item.status === 'SOBRESTOCK';
+      }
 
       return matchesSearch && matchesCategory && matchesStatus;
     });
@@ -74,19 +125,19 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner Alert if Critical */}
-      {criticalItems.length > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      {/* High Alert Banner: Critical Items that are NOT ordered yet */}
+      {criticalUnordered.length > 0 && (
+        <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className="p-2 bg-rose-100 text-rose-700 rounded-lg shrink-0 mt-0.5 sm:mt-0">
+            <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0 mt-0.5 sm:mt-0">
               <AlertOctagon className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-rose-950">
-                ¡Atención! Se detectaron {criticalItems.length} materiales en estado crítico para {selectedMonth.name}
+                ¡Atención! Hay {criticalUnordered.length} materiales en estado crítico sin pedir para {selectedMonth.name}
               </h3>
               <p className="text-xs text-rose-800 mt-0.5">
-                Riesgo inminente de quiebre de stock en fábrica (especialmente: {criticalItems.slice(0, 3).map(i => i.name).join(', ')}).
+                Riesgo inminente de quiebre de stock en fábrica ({criticalUnordered.slice(0, 3).map(i => i.name).join(', ')}).
               </p>
             </div>
           </div>
@@ -98,7 +149,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
               }}
               className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
             >
-              Ver Críticos ({criticalItems.length})
+              Ver Críticos ({criticalUnordered.length})
             </button>
             <button
               onClick={onOpenPurchaseOrder}
@@ -110,105 +161,162 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
         </div>
       )}
 
+      {/* Warning Alert Banner: Ordered items that have very low stock (Risk before arrival!) */}
+      {criticalWhileOrdered.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0 mt-0.5 sm:mt-0">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                <span>⚠️ Stock Muy Bajo con Pedido en Tránsito</span>
+                <span className="text-[11px] bg-amber-200 text-amber-900 font-bold px-2 py-0.2 rounded-full">
+                  {criticalWhileOrdered.length} materiales
+                </span>
+              </h3>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Estos materiales ya fueron pedidos al proveedor, pero el stock actual es muy escaso ({criticalWhileOrdered.map(i => `${i.name} [${i.totalUnits} un.]`).join(', ')}). Hacer seguimiento de entrega urgente.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setSelectedStatus('ORDERED');
+              setSelectedCategory('all');
+            }}
+            className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Ver Pedidos en Curso ({orderedItems.length})
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Total Materials */}
         <div 
           onClick={() => setSelectedStatus('all')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
             selectedStatus === 'all'
               ? 'bg-white border-indigo-400 ring-2 ring-indigo-100 shadow-sm'
               : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
           }`}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Ítems</span>
+          <div className="flex items-center justify-between text-slate-500 mb-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Total Ítems</span>
             <Package className="w-4 h-4 text-slate-400" />
           </div>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-1.5">
             <span className="text-2xl font-black text-slate-900">{totalCount}</span>
-            <span className="text-xs text-slate-400">materiales</span>
+            <span className="text-[11px] text-slate-400">materiales</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Relevados en 5 tipos de material</p>
+          <p className="text-[10px] text-slate-500 mt-1">5 tipos de material</p>
         </div>
 
-        {/* Critical */}
+        {/* Critical (Unordered) */}
         <div 
           onClick={() => setSelectedStatus('CRITICO')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
             selectedStatus === 'CRITICO'
               ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-100 shadow-sm'
               : 'bg-white border-slate-200 hover:border-rose-300 shadow-xs'
           }`}
         >
-          <div className="flex items-center justify-between text-rose-600 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">🔴 Críticos</span>
+          <div className="flex items-center justify-between text-rose-600 mb-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">🔴 Críticos</span>
             <AlertOctagon className="w-4 h-4 text-rose-500" />
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-rose-600">{criticalItems.length}</span>
-            <span className="text-xs text-rose-600 font-semibold">quiebre inminente</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-black text-rose-600">{criticalUnordered.length}</span>
+            <span className="text-[11px] text-rose-600 font-semibold">a pedir ya</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Menos del 50% del mínimo</p>
+          <p className="text-[10px] text-slate-500 mt-1">Sin pedido registrado</p>
         </div>
 
-        {/* Reorder */}
+        {/* Reorder (Unordered) */}
         <div 
           onClick={() => setSelectedStatus('PEDIR')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
             selectedStatus === 'PEDIR'
               ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-100 shadow-sm'
               : 'bg-white border-slate-200 hover:border-amber-300 shadow-xs'
           }`}
         >
-          <div className="flex items-center justify-between text-amber-600 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">🟡 Reponer</span>
+          <div className="flex items-center justify-between text-amber-600 mb-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">🟡 Reponer</span>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-amber-600">{reorderItems.length}</span>
-            <span className="text-xs text-amber-600 font-semibold">a pedir</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-black text-amber-600">{reorderUnordered.length}</span>
+            <span className="text-[11px] text-amber-600 font-semibold">bajo mínimo</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Por debajo del mínimo</p>
+          <p className="text-[10px] text-slate-500 mt-1">Sin pedido registrado</p>
+        </div>
+
+        {/* Pedidos en Curso (NEW KPI) */}
+        <div 
+          onClick={() => setSelectedStatus('ORDERED')}
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+            selectedStatus === 'ORDERED'
+              ? 'bg-sky-50 border-sky-400 ring-2 ring-sky-100 shadow-sm'
+              : 'bg-white border-slate-200 hover:border-sky-300 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center justify-between text-sky-700 mb-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">🚚 En Camino</span>
+            <Truck className="w-4 h-4 text-sky-600" />
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-black text-sky-800">{orderedItems.length}</span>
+            <span className="text-[11px] text-sky-700 font-semibold">pedidos</span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">
+            {criticalWhileOrdered.length > 0 ? (
+              <span className="text-amber-700 font-bold">{criticalWhileOrdered.length} muy bajos</span>
+            ) : (
+              'En espera de entrega'
+            )}
+          </p>
         </div>
 
         {/* Optimal */}
         <div 
           onClick={() => setSelectedStatus('OPTIMO')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
             selectedStatus === 'OPTIMO'
               ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-100 shadow-sm'
               : 'bg-white border-slate-200 hover:border-emerald-300 shadow-xs'
           }`}
         >
-          <div className="flex items-center justify-between text-emerald-600 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">🟢 Óptimos</span>
+          <div className="flex items-center justify-between text-emerald-600 mb-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">🟢 Óptimos</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-1.5">
             <span className="text-2xl font-black text-emerald-600">{optimalItems.length}</span>
-            <span className="text-xs text-emerald-600 font-semibold">abastecidos</span>
+            <span className="text-[11px] text-emerald-600 font-semibold">abastecidos</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Dentro del rango Min/Max</p>
+          <p className="text-[10px] text-slate-500 mt-1">Dentro del rango</p>
         </div>
 
-        {/* Cantidad Total to Order */}
+        {/* Total a Pedir (Pendientes reales) */}
         <div 
           onClick={onOpenPurchaseOrder}
-          className="p-4 rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-indigo-100/40 hover:border-indigo-400 transition-all cursor-pointer shadow-xs col-span-2 lg:col-span-1"
+          className="p-3.5 rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-indigo-100/40 hover:border-indigo-400 transition-all cursor-pointer shadow-xs"
         >
-          <div className="flex items-center justify-between text-indigo-700 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">📦 Total a Pedir</span>
+          <div className="flex items-center justify-between text-indigo-700 mb-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">📦 Total a Pedir</span>
             <ShoppingBag className="w-4 h-4 text-indigo-600" />
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black text-indigo-900 font-mono">
+            <span className="text-xl font-black text-indigo-900 font-mono">
               {totalUnitsToOrder.toLocaleString('es-AR')}
             </span>
-            <span className="text-xs text-indigo-700 font-bold">unidades</span>
+            <span className="text-[10px] text-indigo-700 font-bold">un.</span>
           </div>
-          <p className="text-[11px] text-indigo-600 mt-1">
-            En {itemsToOrderCount} materiales a reponer
+          <p className="text-[10px] text-indigo-600 mt-1">
+            {itemsToOrderCount} materiales pendientes
           </p>
         </div>
       </div>
@@ -278,7 +386,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                   : 'text-slate-600 hover:bg-rose-50'
               }`}
             >
-              🔴 Críticos ({criticalItems.length})
+              🔴 Críticos ({criticalUnordered.length})
             </button>
             <button
               onClick={() => setSelectedStatus('PEDIR')}
@@ -288,7 +396,17 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                   : 'text-slate-600 hover:bg-amber-50'
               }`}
             >
-              🟡 Reponer ({reorderItems.length})
+              🟡 Reponer ({reorderUnordered.length})
+            </button>
+            <button
+              onClick={() => setSelectedStatus('ORDERED')}
+              className={`px-2.5 py-1 rounded-md font-medium text-xs transition-colors cursor-pointer ${
+                selectedStatus === 'ORDERED'
+                  ? 'bg-sky-100 text-sky-800 font-bold'
+                  : 'text-slate-600 hover:bg-sky-50'
+              }`}
+            >
+              🚚 Pedidos ({orderedItems.length})
             </button>
             <button
               onClick={() => setSelectedStatus('OPTIMO')}
@@ -321,13 +439,14 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                 <th className="py-3 px-3 text-right font-bold text-indigo-700 bg-indigo-50/50">
                   Total a Pedir
                 </th>
-                <th className="py-3 px-3 text-center">Ajuste Bultos</th>
+                <th className="py-3 px-3 text-center">Gestión de Pedido</th>
+                <th className="py-3 px-3 text-center">Ajuste Rápido</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={11} className="py-12 text-center text-slate-400">
                     No se encontraron materiales con los filtros aplicados.
                   </td>
                 </tr>
@@ -336,17 +455,26 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                   const isCritical = item.status === 'CRITICO';
                   const isReorder = item.status === 'PEDIR';
                   const isOverstock = item.status === 'SOBRESTOCK';
+                  const isOrdered = item.isOrdered ?? false;
+                  const isLowStockWhileOrdered = isOrdered && (isCritical || item.totalUnits <= item.minStockAdjusted * 0.3);
 
                   return (
                     <tr
                       key={item.id}
-                      className="hover:bg-slate-50 transition-colors"
+                      className={`hover:bg-slate-50 transition-colors ${
+                        isOrdered ? 'bg-sky-50/20' : ''
+                      }`}
                     >
                       {/* Name */}
                       <td className="py-3 px-4">
                         <div className="font-bold text-slate-900">
                           {item.name}
                         </div>
+                        {item.batches && item.batches.length > 1 && (
+                          <div className="text-[10px] text-indigo-600 font-mono mt-0.5">
+                            {item.batches.length} partidas de bultos
+                          </div>
+                        )}
                         {item.notes && (
                           <div className="text-[10px] text-slate-500 font-normal mt-0.5">
                             {item.notes}
@@ -389,48 +517,126 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                         {item.maxStockAdjusted.toLocaleString('es-AR')}
                       </td>
 
-                      {/* Status */}
+                      {/* Status Column: Si está pedido, NO muestra 'Reponer', muestra 'Pedido en Curso' + alerta si el stock es muy bajo */}
                       <td className="py-3 px-3 text-center">
-                        {isCritical && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                            🔴 Crítico
-                          </span>
-                        )}
-                        {isReorder && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            🟡 Reponer
-                          </span>
-                        )}
-                        {item.status === 'OPTIMO' && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            🟢 Óptimo
-                          </span>
-                        )}
-                        {isOverstock && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                            🔵 Sobrestock
-                          </span>
+                        {isOrdered ? (
+                          isLowStockWhileOrdered ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full shadow-2xs">
+                                ⚠️ Muy Bajo • Pedido
+                              </span>
+                              <span className="text-[9px] text-rose-700 font-semibold">
+                                ¡Riesgo de quiebre!
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-300">
+                              <Truck className="w-3 h-3 text-sky-600" /> Pedido en Curso
+                            </span>
+                          )
+                        ) : (
+                          <>
+                            {isCritical && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                🔴 Crítico
+                              </span>
+                            )}
+                            {isReorder && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                🟡 Reponer
+                              </span>
+                            )}
+                            {item.status === 'OPTIMO' && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                🟢 Óptimo
+                              </span>
+                            )}
+                            {isOverstock && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                                🔵 Sobrestock
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
 
-                      {/* Suggestion to Order (TOTAL UNITS ONLY) */}
-                      <td className="py-3 px-3 text-right font-mono font-bold bg-indigo-50/40">
-                        {item.unitsToOrder > 0 ? (
+                      {/* Total to Order Column */}
+                      <td className="py-3 px-3 text-right font-mono bg-indigo-50/30">
+                        {isOrdered ? (
+                          <div>
+                            <span className="text-sky-700 text-xs font-bold block">
+                              En tránsito
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              ({item.unitsToOrder.toLocaleString('es-AR')} un.)
+                            </span>
+                          </div>
+                        ) : item.unitsToOrder > 0 ? (
                           <span className="text-indigo-800 text-sm font-black">
                             {item.unitsToOrder.toLocaleString('es-AR')} un.
                           </span>
                         ) : (
-                          <span className="text-slate-400 font-normal">0 (Cubierto)</span>
+                          <span className="text-slate-400 font-normal text-[11px]">0 (Cubierto)</span>
                         )}
                       </td>
 
-                      {/* Quick Adjustment */}
+                      {/* Order Tracking Action: Marcar pedido / Recibido / Cancelar */}
+                      <td className="py-3 px-3 text-center">
+                        {isOrdered ? (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => onToggleOrdered?.(item.id, false)}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors active:scale-95"
+                              title="Marcar como recibido en fábrica"
+                            >
+                              <Check className="w-3 h-3" /> Recibido
+                            </button>
+                            <button
+                              onClick={() => onToggleOrdered?.(item.id, false)}
+                              className="w-6 h-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+                              title="Cancelar estado de pedido"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (isReorder || isCritical) ? (
+                          <div className="inline-flex items-center gap-1 justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleCopySingleItem(item)}
+                              className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+                                copiedItemId === item.id
+                                  ? 'bg-emerald-600 text-white border-emerald-600'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                              }`}
+                              title="Copiar texto formal de solicitud para enviar a proveedor"
+                            >
+                              {copiedItemId === item.id ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => onToggleOrdered?.(item.id, true)}
+                              className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white rounded-lg text-[11px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer transition-all active:scale-95 whitespace-nowrap"
+                              title="Marcar que ya se realizó el pedido a compras/proveedor"
+                            >
+                              <Truck className="w-3 h-3" /> Marcar Pedido
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-300 font-medium">—</span>
+                        )}
+                      </td>
+
+                      {/* Quick Adjustment (+ / - Bultos) */}
                       <td className="py-3 px-3 text-center">
                         <div className="inline-flex items-center gap-1 border border-slate-200 rounded-md bg-white p-0.5">
                           <button
                             onClick={() => onUpdateBultos(item.id, Math.max(0, item.bultos - 1))}
                             className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors cursor-pointer"
-                            title="Restar 1 bulto"
+                            title="Restar 1 bulto (Abrir bulto)"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
@@ -440,7 +646,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                           <button
                             onClick={() => onUpdateBultos(item.id, item.bultos + 1)}
                             className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors cursor-pointer"
-                            title="Sumar 1 bulto"
+                            title="Sumar 1 bulto (Entrada de stock)"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -458,10 +664,15 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
         <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2">
           <div>
             Mostrando <strong>{filteredItems.length}</strong> de <strong>{totalCount}</strong> materiales
+            {orderedItems.length > 0 && (
+              <span className="ml-2 text-sky-700 font-semibold">
+                • {orderedItems.length} pedidos en tránsito
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-4">
             <span>
-              Total a pedir: <strong className="text-indigo-700 text-sm">{totalUnitsToOrder.toLocaleString('es-AR')} unidades</strong>
+              Total pendiente de pedir: <strong className="text-indigo-700 text-sm">{totalUnitsToOrder.toLocaleString('es-AR')} unidades</strong>
             </span>
             <button
               onClick={onOpenPurchaseOrder}

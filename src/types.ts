@@ -9,6 +9,13 @@ export interface MonthMinMax {
   max: number;
 }
 
+export interface BultoBatch {
+  id: string;
+  bultos: number;
+  unitsPerBulto: number;
+  label?: string;
+}
+
 export interface MaterialItem {
   id: string;
   category: MaterialCategory;
@@ -16,10 +23,19 @@ export interface MaterialItem {
   bultos: number;
   unitsPerBulto: number;
   totalUnits: number;
+  // Multiple batch lines for products with diverse package quantities (e.g. 30 de 65 un. y 15 de 85 un.)
+  batches?: BultoBatch[];
   isDirectUnits?: boolean; // True if loaded directly in total units without bultos
   allowDirectTotal?: boolean; // Controls whether user has explicitly unlocked direct total entry
   minStockBase: number;
   maxStockBase: number;
+  // Supplier lead time in days for reorder point calculation
+  supplierLeadTimeDays?: number;
+  // Order tracking status (when purchase order is placed)
+  isOrdered?: boolean;
+  orderedAt?: string;
+  orderedStockSnapshot?: number; // Stock at time of ordering, auto-clears when stock increases
+  orderedUnits?: number;
   // Specific min/max configured for each month (1 to 12) directly or via Google Sheets
   monthlyMinMax?: Record<number, MonthMinMax>;
   minStockAdjusted: number;

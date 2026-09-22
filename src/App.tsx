@@ -90,16 +90,44 @@ export default function App() {
   // Handlers
   const handleUpdateBultos = (id: string, newBultos: number) => {
     setRawItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              bultos: newBultos,
-              totalUnits: newBultos * item.unitsPerBulto,
-              isDirectUnits: false,
-            }
-          : item
-      )
+      prev.map((item) => {
+        if (item.id === id) {
+          let updatedBatches = item.batches;
+          if (updatedBatches && updatedBatches.length > 0) {
+            updatedBatches = [
+              { ...updatedBatches[0], bultos: newBultos },
+              ...updatedBatches.slice(1),
+            ];
+          }
+          const totalUnits = updatedBatches && updatedBatches.length > 0
+            ? updatedBatches.reduce((acc, b) => acc + ((b.bultos || 0) * (b.unitsPerBulto || 0)), 0)
+            : newBultos * item.unitsPerBulto;
+          return {
+            ...item,
+            bultos: newBultos,
+            batches: updatedBatches,
+            totalUnits,
+            isDirectUnits: false,
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const handleToggleOrdered = (id: string, isOrdered: boolean) => {
+    setRawItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            isOrdered,
+            orderedAt: isOrdered ? new Date().toISOString() : undefined,
+            orderedStockSnapshot: isOrdered ? item.totalUnits : undefined,
+          };
+        }
+        return item;
+      })
     );
   };
 
@@ -118,8 +146,13 @@ export default function App() {
             bultos: found.bultos,
             unitsPerBulto: found.unitsPerBulto,
             totalUnits: found.totalUnits,
+            batches: found.batches,
             isDirectUnits: found.isDirectUnits,
             allowDirectTotal: found.allowDirectTotal,
+            isOrdered: found.isOrdered,
+            orderedAt: found.orderedAt,
+            orderedStockSnapshot: found.orderedStockSnapshot,
+            supplierLeadTimeDays: found.supplierLeadTimeDays ?? oldItem.supplierLeadTimeDays,
           };
         }
         return oldItem;
@@ -214,6 +247,7 @@ export default function App() {
             selectedMonth={selectedMonth}
             onUpdateBultos={handleUpdateBultos}
             onOpenPurchaseOrder={() => setIsPurchaseOrderOpen(true)}
+            onToggleOrdered={handleToggleOrdered}
           />
         )}
 

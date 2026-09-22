@@ -416,11 +416,21 @@ export function computeMaterialCalculations(
   monthFactor: number,
   monthNumber: number = 8
 ): MaterialItem {
-  // Allow direct total units entry if there are no bultos or item was set by direct units
-  const totalUnits = rawItem.isDirectUnits || (rawItem.bultos === 0 && rawItem.totalUnits > 0)
-    ? rawItem.totalUnits
-    : rawItem.bultos * rawItem.unitsPerBulto;
+  // Compute total units and bultos from batches if present
+  let totalUnits = rawItem.totalUnits;
+  let totalBultos = rawItem.bultos;
 
+  if (rawItem.batches && rawItem.batches.length > 0) {
+    if (!rawItem.isDirectUnits) {
+      totalUnits = rawItem.batches.reduce((sum, b) => sum + (b.bultos * b.unitsPerBulto), 0);
+    }
+    totalBultos = rawItem.batches.reduce((sum, b) => sum + b.bultos, 0);
+  } else {
+    // Allow direct total units entry if there are no bultos or item was set by direct units
+    totalUnits = rawItem.isDirectUnits || (rawItem.bultos === 0 && rawItem.totalUnits > 0)
+      ? rawItem.totalUnits
+      : rawItem.bultos * rawItem.unitsPerBulto;
+  }
 
   // Use explicit monthly min/max set for this specific product and month (e.g. loaded from Google Sheets)
   let minStockAdjusted: number;
@@ -437,10 +447,20 @@ export function computeMaterialCalculations(
   let status: MaterialItem['status'] = 'OPTIMO';
   let unitsToOrder = 0;
 
+  // Calculate lead time threshold (Anticipation buffer based on supplier lead days)
+  const leadDays = rawItem.supplierLeadTimeDays || 0;
+  const dailyConsumption = minStockAdjusted > 0 ? minStockAdjusted / 30 : 0;
+  const leadBuffer = Math.round(dailyConsumption * leadDays);
+  const reorderThresholdWithLead = minStockAdjusted + leadBuffer;
+
   if (totalUnits <= minStockAdjusted * 0.5) {
     status = 'CRITICO';
     unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
   } else if (totalUnits < minStockAdjusted) {
+    status = 'PEDIR';
+    unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
+  } else if (leadDays > 0 && totalUnits <= reorderThresholdWithLead) {
+    // Alerta de pedido anticipado para llegar a tiempo antes del stock mínimo
     status = 'PEDIR';
     unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
   } else if (totalUnits > maxStockAdjusted * 1.25) {
@@ -452,18 +472,37 @@ export function computeMaterialCalculations(
   }
 
   // Calculate bultos rounded up (providers supply closed bundles)
-  const bultosToOrder = unitsToOrder > 0 && rawItem.unitsPerBulto > 0
-    ? Math.ceil(unitsToOrder / rawItem.unitsPerBulto)
+  const primaryUnitsPerBulto = rawItem.batches && rawItem.batches.length > 0
+    ? rawItem.batches[0].unitsPerBulto
+    : rawItem.unitsPerBulto;
+
+  const bultosToOrder = unitsToOrder > 0 && primaryUnitsPerBulto > 0
+    ? Math.ceil(unitsToOrder / primaryUnitsPerBulto)
     : 0;
+
+  // Auto-clear ordered state when stock increases (material has arrived at warehouse)
+  let isOrdered = rawItem.isOrdered ?? false;
+  let orderedAt = rawItem.orderedAt;
+  let orderedStockSnapshot = rawItem.orderedStockSnapshot;
+
+  if (isOrdered && orderedStockSnapshot !== undefined && totalUnits > orderedStockSnapshot) {
+    isOrdered = false;
+    orderedAt = undefined;
+    orderedStockSnapshot = undefined;
+  }
 
   return {
     ...rawItem,
+    bultos: totalBultos,
     totalUnits,
     minStockAdjusted,
     maxStockAdjusted,
     unitsToOrder,
     bultosToOrder,
-    status
+    status,
+    isOrdered,
+    orderedAt,
+    orderedStockSnapshot,
   };
 }
 

@@ -309,8 +309,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="hidden lg:flex items-center gap-3 text-[11px] text-slate-400">
             <span>Mes: <strong className="text-white">{selectedMonth.name}</strong></span>
-            <span>•</span>
-            <span>Factor: <strong className="text-emerald-400">{selectedMonth.factor}x</strong></span>
           </div>
         </div>
       </header>

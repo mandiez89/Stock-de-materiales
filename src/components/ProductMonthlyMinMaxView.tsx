@@ -76,6 +76,22 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
     );
   };
 
+  // Handle in-place editing of supplier lead time days
+  const handleLeadTimeChange = (itemId: string, days: number) => {
+    const val = Math.max(1, isNaN(days) ? 1 : Math.floor(days));
+    setLocalItems((prev) =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          return {
+            ...item,
+            supplierLeadTimeDays: val,
+          };
+        }
+        return item;
+      })
+    );
+  };
+
   // Save changes to state
   const handleSaveToApp = () => {
     onUpdateItemsMinMax(localItems);
@@ -295,6 +311,12 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
                 <th className="py-3 px-4 text-center bg-indigo-50/70 border-r border-indigo-100 text-indigo-900 font-bold">
                   Stock Máximo ({monthlyFactors[selectedMonth - 1]?.shortName})
                 </th>
+                <th className="py-3 px-3 text-center bg-slate-100/70 border-r border-slate-200 text-slate-700 font-bold">
+                  Demora Prov. (Días)
+                </th>
+                <th className="py-3 px-3 text-right bg-amber-50/70 border-r border-amber-200 text-amber-950 font-bold">
+                  Punto de Pedido (Alerta)
+                </th>
                 <th className="py-3 px-4 text-right text-slate-400">Base Histórica</th>
               </tr>
             </thead>
@@ -356,6 +378,43 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
                         />
                         <span className="text-[10px] text-slate-400">un.</span>
                       </div>
+                    </td>
+
+                    {/* Supplier Lead Time Days (Editable) */}
+                    <td className="py-2 px-3 text-center border-r border-slate-200">
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="90"
+                          value={item.supplierLeadTimeDays ?? 15}
+                          onChange={(e) =>
+                            handleLeadTimeChange(item.id, parseInt(e.target.value, 10))
+                          }
+                          className="w-14 px-1.5 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                        />
+                        <span className="text-[10px] text-slate-500 font-medium">días</span>
+                      </div>
+                    </td>
+
+                    {/* Calculated Reorder Trigger (Anticipation based on Lead Time) */}
+                    <td className="py-2 px-3 text-right bg-amber-50/40 border-r border-amber-200 font-mono">
+                      {(() => {
+                        const leadDays = item.supplierLeadTimeDays ?? 15;
+                        const dailyRate = monthVal.min / 30;
+                        const leadBuffer = Math.round(dailyRate * leadDays);
+                        const reorderPoint = monthVal.min + leadBuffer;
+                        return (
+                          <div>
+                            <div className="font-bold text-amber-950 text-xs">
+                              {reorderPoint.toLocaleString('es-AR')} un.
+                            </div>
+                            <div className="text-[9px] text-amber-800 font-sans">
+                              +{leadBuffer.toLocaleString('es-AR')} un. ({leadDays}d demora)
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Base values */}
