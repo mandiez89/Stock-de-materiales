@@ -83,7 +83,7 @@ export async function callSheets(
   if (!url || !accessToken) {
     return {
       success: false,
-      message: 'Google Sheets no está configurado en este dispositivo. Carga la URL y el token de acceso en la pestaña "Google Sheets".',
+      message: 'La sincronización en la nube no está configurada en este dispositivo. Configúrala desde los Ajustes de Nube en el panel Administrador.',
     };
   }
 

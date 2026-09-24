@@ -1,4 +1,4 @@
-import { MaterialItem, MonthlyFactor, InventoryRecord } from '../types';
+import { MaterialItem, MonthlyFactor } from '../types';
 
 export const MONTHLY_FACTORS: MonthlyFactor[] = [
   { month: 1, name: 'Enero', shortName: 'Ene', factor: 1.0, seasonName: 'Enero', description: 'Stock estándar' },
@@ -510,19 +510,4 @@ export function computeMaterialCalculations(
     orderedStockSnapshot,
   };
 }
-
-export const INITIAL_INVENTORY_HISTORY: InventoryRecord[] = [
-  {
-    id: 'rec-2026-08',
-    date: '2026-08-15',
-    responsible: 'Operador Depósito',
-    periodName: 'Agosto 2026',
-    totalItems: 52,
-    criticalCount: 7,
-    reorderCount: 11,
-    totalBultosToOrder: 68,
-    notes: 'Relevamiento mensual registrado digitalmente en el sistema.',
-    items: [] // Populated dynamically
-  }
-];
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   BarChart3, 
   ClipboardList, 
-  FileSpreadsheet, 
   SlidersHorizontal, 
   Download, 
   Calendar, 
@@ -13,15 +12,16 @@ import {
   Lock,
   Unlock,
   X,
-  Wifi,
   KeyRound,
-  Delete
+  Delete,
+  Cloud,
+  Settings
 } from 'lucide-react';
 import { MonthlyFactor, UserRole } from '../types';
 import { SheetsSyncState } from '../state/useSheetsSync';
 import { callSheets, isSheetsConfigured, setSessionAdminPin } from '../services/sheetsSync';
 
-export type AppTab = 'dashboard' | 'entry' | 'stock' | 'minmax' | 'sheets';
+export type AppTab = 'dashboard' | 'entry' | 'stock' | 'minmax';
 
 interface HeaderProps {
   activeTab: AppTab;
@@ -32,6 +32,7 @@ interface HeaderProps {
   monthlyFactors: MonthlyFactor[];
   onExportCSV: () => void;
   onOpenPurchaseOrder: () => void;
+  onOpenSyncSettings?: () => void;
   criticalCount: number;
   totalUnitsToOrder: number;
   sync: SheetsSyncState;
@@ -51,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
   monthlyFactors,
   onExportCSV,
   onOpenPurchaseOrder,
+  onOpenSyncSettings,
   criticalCount,
   totalUnitsToOrder,
   sync,
@@ -147,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
               <p className="text-[11px] text-slate-400 hidden sm:block">
                 {isOperator 
                   ? 'Relevamiento mensual de materias primas y consulta de existencias'
-                  : 'Gestión integral de compras, cálculo mensual de mínimos/máximos y Google Sheets'}
+                  : 'Gestión integral de compras, cálculo mensual de mínimos/máximos y sincronización en la nube'}
               </p>
             </div>
           </div>
@@ -163,26 +165,28 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
 
-            {/* Sheets connection status badge */}
+            {/* Cloud connection status badge */}
             <div 
-              className={`hidden sm:flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border ${
+              className={`hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border font-medium ${
                 sync.status === 'synced' || sync.status === 'idle'
                   ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300' 
                   : sync.status === 'error'
                   ? 'bg-rose-950/60 border-rose-800/60 text-rose-300'
                   : 'bg-amber-950/60 border-amber-800/60 text-amber-300'
               }`}
-              title={sync.error || (sync.configured ? 'Google Sheets' : 'Google Sheets no configurado en este dispositivo')}
+              title={sync.error || (sync.configured ? 'Sincronizado con la nube' : 'Modo local: sin nube configurada en este dispositivo')}
             >
-              <Wifi className="w-3 h-3" />
+              <Cloud className="w-3.5 h-3.5" />
               <span>
                 {!sync.configured
-                  ? 'Sin Sheets'
+                  ? 'Modo Local'
                   : sync.status === 'error'
-                  ? 'Error Sheets'
+                  ? 'Error Nube'
+                  : sync.status === 'syncing'
+                  ? 'Sincronizando...'
                   : sync.pendingCount > 0
                   ? `${sync.pendingCount} pendientes`
-                  : 'Sheets al día'}
+                  : 'Nube al día'}
               </span>
             </div>
 
@@ -217,6 +221,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>Bloquear Tablet</span>
                 </button>
 
+                {/* Cloud Sync Settings Modal Button */}
+                {onOpenSyncSettings && (
+                  <button
+                    onClick={onOpenSyncSettings}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-lg border border-slate-700 transition-colors cursor-pointer"
+                    title="Ajustes de Sincronización en la Nube"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="hidden md:inline">Ajustes Nube</span>
+                  </button>
+                )}
+
                 {/* Order Button (ONLY TOTAL UNITS, NO BULTOS) */}
                 <button
                   onClick={onOpenPurchaseOrder}
@@ -229,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* CSV Export */}
                 <button
                   onClick={onExportCSV}
-                  className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors cursor-pointer"
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors cursor-pointer"
                   title="Exportar planilla actual a CSV"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -323,18 +339,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <SlidersHorizontal className="w-4 h-4" />
                   <span>Mínimos y Máximos Mensuales</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('sheets')}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                    activeTab === 'sheets'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Google Sheets</span>
                 </button>
               </>
             )}

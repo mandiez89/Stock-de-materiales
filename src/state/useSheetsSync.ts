@@ -187,7 +187,7 @@ export function useSheetsSync(params: {
   const syncNow = useCallback(
     async (metadata?: Record<string, unknown>) => {
       if (!isSheetsConfigured()) {
-        fail('Google Sheets no está configurado en este dispositivo.');
+        fail('La sincronización en la nube no está configurada en este dispositivo.');
         return false;
       }
       const items = computedRef.current;

@@ -56,26 +56,3 @@ export interface MonthlyFactor {
   description: string;
 }
 
-export interface InventoryRecord {
-  id: string;
-  date: string;
-  responsible: string;
-  periodName: string;
-  totalItems: number;
-  criticalCount: number;
-  reorderCount: number;
-  totalBultosToOrder: number;
-  items: MaterialItem[];
-  notes?: string;
-}
-
-export interface GoogleSheetsConfig {
-  sheetUrl: string;
-  spreadsheetId: string;
-  sheetTab: string;
-  scriptWebhookUrl: string;
-  autoSync: boolean;
-  lastSync?: string;
-  syncStatus: 'idle' | 'syncing' | 'connected' | 'error';
-}
-

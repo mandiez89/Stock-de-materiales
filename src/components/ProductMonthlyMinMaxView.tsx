@@ -2,17 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { 
   Sliders, 
   Download, 
-  Upload, 
   Search, 
-  Filter, 
   Save, 
   CheckCircle2, 
   AlertCircle, 
-  FileSpreadsheet, 
-  Sparkles,
-  Info,
+  Cloud, 
   Calendar,
-  RotateCcw
+  X
 } from 'lucide-react';
 import { MaterialItem, MaterialCategory, MonthlyFactor, MonthMinMax } from '../types';
 import { exportMinMaxToCSV } from '../data/sheetsIntegration';
@@ -32,13 +28,10 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
   onSyncMinMaxToSheets,
 }) => {
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1); // Current month
-  const [viewMode, setViewMode] = useState<'single_month' | 'full_year'>('single_month');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
-  const [pastedCSV, setPastedCSV] = useState<string>('');
 
   // Local copy of items for in-place editing
   const [localItems, setLocalItems] = useState<MaterialItem[]>(items);
@@ -97,7 +90,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
     );
   };
 
-  // Save changes to state
+  // Save changes to local state
   const handleSaveToApp = () => {
     onUpdateItemsMinMax(localItems);
     setHasUnsavedEdits(false);
@@ -109,7 +102,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
-  // Sync parameters directly to Google Sheets
+  // Sync parameters directly to cloud
   const handleSyncToSheets = async () => {
     if (!onSyncMinMaxToSheets) return;
     setIsSaving(true);
@@ -120,19 +113,19 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
       if (success) {
         setFeedbackMessage({
           type: 'success',
-          text: '¡Parámetros guardados y sincronizados con la hoja "Parametros_MinMax" en Google Sheets!',
+          text: '¡Parámetros guardados y sincronizados correctamente en la nube!',
         });
         confetti({ particleCount: 70, spread: 70 });
       } else {
         setFeedbackMessage({
           type: 'error',
-          text: 'Guardado en la app, pero no en Google Sheets. Revisa la conexión y que hayas ingresado con el PIN correcto.',
+          text: 'Guardado en la app, pero no en la nube. Revisa la conexión en Ajustes de Nube.',
         });
       }
     } catch (e: any) {
       setFeedbackMessage({
         type: 'error',
-        text: `Error al enviar a Google Sheets: ${e.message}`,
+        text: `Error al sincronizar con la nube: ${e.message}`,
       });
     } finally {
       setIsSaving(false);
@@ -178,7 +171,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-1 max-w-3xl">
-              Configura los umbrales de seguridad mes por mes para cada uno de los 52 materiales. Puedes editarlos aquí en la web, descargarlos en CSV o cargarlos directamente desde la pestaña <strong>"Parametros_MinMax"</strong> en tu Google Sheet.
+              Configura los umbrales de seguridad mes por mes para cada uno de los 52 materiales. Los cambios se sincronizan en la nube y aplican inmediatamente al cálculo de reposición.
             </p>
           </div>
 
@@ -187,10 +180,10 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
             <button
               onClick={handleDownloadCSV}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Descargar archivo CSV para abrir o importar en Google Sheets"
+              title="Descargar archivo CSV de parámetros"
             >
               <Download className="w-4 h-4 text-slate-600" />
-              <span>Plantilla Google Sheets (CSV)</span>
+              <span>Exportar CSV</span>
             </button>
 
             {onSyncMinMaxToSheets && (
@@ -199,8 +192,8 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
                 disabled={isSaving}
                 className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>{isSaving ? 'Sincronizando...' : 'Guardar en Google Sheets'}</span>
+                <Cloud className="w-4 h-4" />
+                <span>{isSaving ? 'Sincronizando...' : 'Guardar en la Nube'}</span>
               </button>
             )}
 
@@ -283,22 +276,18 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Ej: 8100, bombachas, celofán..."
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                className="w-full pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* How Google Sheets min/max works banner */}
-      <div className="bg-indigo-900 text-white rounded-xl p-4 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-        <div className="flex items-start gap-2.5">
-          <Info className="w-4 h-4 text-indigo-300 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-bold text-white">¿Cómo cargar los Mínimos y Máximos directamente desde Google Sheets?</p>
-            <p className="text-indigo-200 text-[11px] mt-0.5">
-              En tu hoja de cálculo se crea la pestaña <strong>"Parametros_MinMax"</strong> con una columna para el Mínimo y Máximo de cada mes (Min_Ene, Max_Ene, ..., Min_Dic, Max_Dic). Mariano puede modificar los valores ahí libremente y la app web los respetará en cada cálculo de reposición.
-            </p>
           </div>
         </div>
       </div>

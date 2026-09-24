@@ -11,7 +11,7 @@ import { StockDashboard } from './components/StockDashboard';
 import { TabletStockEntry } from './components/TabletStockEntry';
 import { CurrentStockView } from './components/CurrentStockView';
 import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView';
-import { SheetsIntegrationView } from './components/SheetsIntegrationView';
+import { CloudSyncSettingsModal } from './components/CloudSyncSettingsModal';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
 import { callSheets } from './services/sheetsSync';
 import { mergeMinMaxEdits, mergeSavedItems, normalizeRawItem } from './state/stockState';
@@ -76,6 +76,7 @@ export default function App() {
 
   // Modals
   const [isPurchaseOrderOpen, setIsPurchaseOrderOpen] = useState(false);
+  const [isCloudSettingsOpen, setIsCloudSettingsOpen] = useState(false);
 
   // Dynamically compute adjusted items based on per-product monthly min/max
   const computedItems: MaterialItem[] = useMemo(() => {
@@ -192,6 +193,7 @@ export default function App() {
         monthlyFactors={monthlyFactors}
         onExportCSV={handleExportCSV}
         onOpenPurchaseOrder={() => setIsPurchaseOrderOpen(true)}
+        onOpenSyncSettings={() => setIsCloudSettingsOpen(true)}
         criticalCount={criticalCount}
         totalUnitsToOrder={totalUnitsToOrder}
         sync={sync}
@@ -238,15 +240,6 @@ export default function App() {
             onSyncMinMaxToSheets={handleSyncMinMaxToSheets}
           />
         )}
-
-        {/* VIEW 5: Google Sheets Webhook Architecture (Admin Only) */}
-        {activeTab === 'sheets' && userRole === 'admin' && (
-          <SheetsIntegrationView
-            items={computedItems}
-            selectedMonth={selectedMonth}
-            sync={sync}
-          />
-        )}
       </main>
 
       {/* Footer */}
@@ -261,10 +254,10 @@ export default function App() {
             </span>
             {userRole === 'admin' && (
               <button
-                onClick={() => setActiveTab('sheets')}
-                className="text-emerald-700 hover:text-emerald-800 font-semibold cursor-pointer"
+                onClick={() => setIsCloudSettingsOpen(true)}
+                className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer transition-colors"
               >
-                Configurar Google Sheets
+                Ajustes de Sincronización en la Nube
               </button>
             )}
           </div>
@@ -277,6 +270,15 @@ export default function App() {
         onClose={() => setIsPurchaseOrderOpen(false)}
         itemsToOrder={itemsToOrder}
         monthName={selectedMonth.name}
+      />
+
+      {/* Cloud Sync Settings Modal (Admin Only) */}
+      <CloudSyncSettingsModal
+        isOpen={isCloudSettingsOpen}
+        onClose={() => setIsCloudSettingsOpen(false)}
+        items={computedItems}
+        selectedMonth={selectedMonth}
+        sync={sync}
       />
     </div>
   );

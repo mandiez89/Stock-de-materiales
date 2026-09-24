@@ -2,14 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { 
   PackageCheck, 
   Search, 
-  Filter, 
-  Layers, 
-  CheckCircle2, 
-  AlertTriangle, 
-  TrendingUp, 
-  Calendar,
-  Eye,
-  ArrowUpDown
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  X
 } from 'lucide-react';
 import { MaterialItem, MaterialCategory, MonthlyFactor } from '../types';
 
@@ -19,6 +15,8 @@ interface CurrentStockViewProps {
   onNavigateToEntry: () => void;
 }
 
+type SortKey = 'category' | 'name' | 'bultos' | 'unitsPerBulto' | 'totalUnits' | 'minStockAdjusted' | 'status';
+
 export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
   items,
   selectedMonth,
@@ -27,7 +25,8 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'name' | 'bultos' | 'totalUnits'>('category');
+  const [sortKey, setSortKey] = useState<SortKey>('category');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Summary figures
   const totalBultos = useMemo(() => items.reduce((acc, i) => acc + i.bultos, 0), [items]);
@@ -38,16 +37,53 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
 
   const categories: MaterialCategory[] = ['Cajas', 'Celofanes', 'Bolsitas', 'Caballetes', 'Cartones'];
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortOrder('asc');
+    }
+  };
+
   // Filter and sort
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const list = items.filter((item) => {
+      const matchSearch =
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
       const matchStatus = statusFilter === 'all' || item.status === statusFilter;
       return matchSearch && matchCat && matchStatus;
     });
-  }, [items, searchQuery, selectedCategory, statusFilter]);
+
+    return list.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'category') cmp = a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+      else if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
+      else if (sortKey === 'bultos') cmp = a.bultos - b.bultos;
+      else if (sortKey === 'unitsPerBulto') cmp = a.unitsPerBulto - b.unitsPerBulto;
+      else if (sortKey === 'totalUnits') cmp = a.totalUnits - b.totalUnits;
+      else if (sortKey === 'minStockAdjusted') cmp = a.minStockAdjusted - b.minStockAdjusted;
+      else if (sortKey === 'status') {
+        const orderMap: Record<string, number> = { CRITICO: 0, PEDIR: 1, OPTIMO: 2, SOBRESTOCK: 3 };
+        cmp = (orderMap[a.status] ?? 99) - (orderMap[b.status] ?? 99);
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [items, searchQuery, selectedCategory, statusFilter, sortKey, sortOrder]);
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey !== key) {
+      return <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60 inline ml-1" />;
+    }
+    return sortOrder === 'asc' ? (
+      <ArrowUp className="w-3 h-3 text-indigo-600 inline ml-1 font-bold" />
+    ) : (
+      <ArrowDown className="w-3 h-3 text-indigo-600 inline ml-1 font-bold" />
+    );
+  };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -82,7 +118,7 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
             <span className="text-xl font-black text-slate-900 font-mono mt-0.5 block">
               {totalBultos.toLocaleString('es-AR')}
             </span>
-            <span className="text-[10px] text-slate-400">En 52 materiales</span>
+            <span className="text-[10px] text-slate-400">En {items.length} materiales</span>
           </div>
 
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
@@ -120,7 +156,7 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="h-12 px-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-hidden cursor-pointer"
+            className="h-11 px-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 outline-hidden cursor-pointer"
           >
             <option value="all">Todos los Tipos de Material ({items.length})</option>
             {categories.map((c) => (
@@ -134,135 +170,187 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-12 px-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-hidden cursor-pointer"
+            className="h-11 px-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 outline-hidden cursor-pointer"
           >
             <option value="all">Todos los Estados</option>
-            <option value="CRITICO">🔴 Críticos</option>
-            <option value="PEDIR">🟡 A Reponer</option>
-            <option value="OPTIMO">🟢 Óptimos</option>
+            <option value="CRITICO">🔴 Críticos ({criticalItems.length})</option>
+            <option value="PEDIR">🟡 A Reponer ({reorderItems.length})</option>
+            <option value="OPTIMO">🟢 Óptimos ({optimalItems.length})</option>
             <option value="SOBRESTOCK">🔵 Sobrestock</option>
           </select>
         </div>
 
-        {/* Search */}
+        {/* Search with Clear */}
         <div className="relative w-full sm:w-80">
-          <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar material o código..."
-            className="w-full h-12 pl-11 pr-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden font-medium"
+            className="w-full h-11 pl-10 pr-9 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden font-medium"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Stock Table */}
+      {/* Stock Table with interactive sortable headers */}
       <div className="bg-white border-2 border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-100/80 border-b-2 border-slate-200 text-xs font-black text-slate-700 uppercase tracking-wider">
-                <th className="py-4 px-4">Tipo de Material</th>
-                <th className="py-4 px-4">Material / Denominación</th>
-                <th className="py-4 px-4 text-center">Bultos</th>
-                <th className="py-4 px-4 text-right">Unid. x Bulto</th>
-                <th className="py-4 px-4 text-right font-black text-slate-900">Total Unidades</th>
-                <th className="py-4 px-4 text-right text-slate-500">Mínimo ({selectedMonth.shortName})</th>
-                <th className="py-4 px-4 text-center">Diagnóstico</th>
+              <tr className="bg-slate-100/80 border-b-2 border-slate-200 text-xs font-black text-slate-700 uppercase tracking-wider select-none">
+                <th 
+                  onClick={() => handleSort('category')} 
+                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Tipo de Material {renderSortIndicator('category')}
+                </th>
+                <th 
+                  onClick={() => handleSort('name')} 
+                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Material / Denominación {renderSortIndicator('name')}
+                </th>
+                <th 
+                  onClick={() => handleSort('bultos')} 
+                  className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Bultos {renderSortIndicator('bultos')}
+                </th>
+                <th 
+                  onClick={() => handleSort('unitsPerBulto')} 
+                  className="py-3.5 px-4 text-right cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Unid. x Bulto {renderSortIndicator('unitsPerBulto')}
+                </th>
+                <th 
+                  onClick={() => handleSort('totalUnits')} 
+                  className="py-3.5 px-4 text-right font-black text-slate-900 cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Total Unidades {renderSortIndicator('totalUnits')}
+                </th>
+                <th 
+                  onClick={() => handleSort('minStockAdjusted')} 
+                  className="py-3.5 px-4 text-right text-slate-500 cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Mínimo ({selectedMonth.shortName}) {renderSortIndicator('minStockAdjusted')}
+                </th>
+                <th 
+                  onClick={() => handleSort('status')} 
+                  className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-200/70 transition-colors"
+                >
+                  Diagnóstico {renderSortIndicator('status')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredItems.map((item) => {
-                const isCritical = item.status === 'CRITICO';
-                const isReorder = item.status === 'PEDIR';
-                const isOver = item.status === 'SOBRESTOCK';
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-10 text-center text-slate-400 text-sm">
+                    No se encontraron materiales que coincidan con la búsqueda o filtro.
+                  </td>
+                </tr>
+              ) : (
+                filteredItems.map((item) => {
+                  const isCritical = item.status === 'CRITICO';
+                  const isReorder = item.status === 'PEDIR';
+                  const isOver = item.status === 'SOBRESTOCK';
 
-                return (
-                  <tr
-                    key={item.id}
-                    className={`hover:bg-slate-50 transition-colors ${
-                      item.totalUnits === 0 ? 'bg-rose-50/20' : ''
-                    }`}
-                  >
-                    {/* Category */}
-                    <td className="py-4 px-4">
-                      <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300 uppercase">
-                        {item.category}
-                      </span>
-                    </td>
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`hover:bg-slate-50 transition-colors ${
+                        item.totalUnits === 0 ? 'bg-rose-50/20' : ''
+                      }`}
+                    >
+                      {/* Category */}
+                      <td className="py-3.5 px-4">
+                        <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300 uppercase">
+                          {item.category}
+                        </span>
+                      </td>
 
-                    {/* Name */}
-                    <td className="py-4 px-4 font-bold text-slate-900">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-base text-slate-950 font-black">{item.name}</span>
-                        {item.isDirectUnits && (
-                          <span className="text-xs bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-lg border border-indigo-200">
-                            Carga Manual
+                      {/* Name */}
+                      <td className="py-3.5 px-4 font-bold text-slate-900">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm sm:text-base text-slate-950 font-black">{item.name}</span>
+                          {item.isDirectUnits && (
+                            <span className="text-[11px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-lg border border-indigo-200">
+                              Carga Manual
+                            </span>
+                          )}
+                        </div>
+                        {item.notes && (
+                          <span className="text-xs text-slate-500 font-medium block mt-0.5">
+                            {item.notes}
                           </span>
                         )}
-                      </div>
-                      {item.notes && (
-                        <span className="text-xs text-slate-500 font-medium block mt-1">
-                          {item.notes}
-                        </span>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Bultos */}
-                    <td className="py-4 px-4 text-center font-mono font-black text-base sm:text-lg">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-xl ${
-                          item.bultos === 0
-                            ? 'bg-rose-100 text-rose-900 font-black'
-                            : 'bg-slate-100 text-slate-900 font-black'
-                        }`}
-                      >
-                        {item.bultos}
-                      </span>
-                    </td>
-
-                    {/* Units per bulto */}
-                    <td className="py-4 px-4 text-right font-mono font-bold text-slate-600 text-sm">
-                      {item.unitsPerBulto.toLocaleString('es-AR')}
-                    </td>
-
-                    {/* Total units */}
-                    <td className="py-4 px-4 text-right font-mono font-black text-base sm:text-lg text-indigo-950">
-                      {item.totalUnits.toLocaleString('es-AR')} un.
-                    </td>
-
-                    {/* Mínimo mensual */}
-                    <td className="py-4 px-4 text-right font-mono font-bold text-slate-500 text-sm">
-                      {item.minStockAdjusted.toLocaleString('es-AR')}
-                    </td>
-
-                    {/* Status Badge */}
-                    <td className="py-4 px-4 text-center">
-                      {isCritical && (
-                        <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-900 border border-rose-300">
-                          🔴 Crítico
+                      {/* Bultos */}
+                      <td className="py-3.5 px-4 text-center font-mono font-black text-sm sm:text-base">
+                        <span
+                          className={`inline-block px-3 py-1 rounded-xl ${
+                            item.bultos === 0
+                              ? 'bg-rose-100 text-rose-900 font-black'
+                              : 'bg-slate-100 text-slate-900 font-black'
+                          }`}
+                        >
+                          {item.bultos}
                         </span>
-                      )}
-                      {isReorder && (
-                        <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
-                          🟡 Reponer
-                        </span>
-                      )}
-                      {isOver && (
-                        <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-blue-100 text-blue-900 border border-blue-300">
-                          🔵 Sobrestock
-                        </span>
-                      )}
-                      {!isCritical && !isReorder && !isOver && (
-                        <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                          🟢 Óptimo
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+
+                      {/* Units per bulto */}
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-600 text-xs sm:text-sm">
+                        {item.unitsPerBulto.toLocaleString('es-AR')}
+                      </td>
+
+                      {/* Total units */}
+                      <td className="py-3.5 px-4 text-right font-mono font-black text-sm sm:text-base text-indigo-950">
+                        {item.totalUnits.toLocaleString('es-AR')} un.
+                      </td>
+
+                      {/* Mínimo mensual */}
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-500 text-xs sm:text-sm">
+                        {item.minStockAdjusted.toLocaleString('es-AR')}
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="py-3.5 px-4 text-center">
+                        {isCritical && (
+                          <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-900 border border-rose-300">
+                            🔴 Crítico
+                          </span>
+                        )}
+                        {isReorder && (
+                          <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                            🟡 Reponer
+                          </span>
+                        )}
+                        {isOver && (
+                          <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-blue-100 text-blue-900 border border-blue-300">
+                            🔵 Sobrestock
+                          </span>
+                        )}
+                        {!isCritical && !isReorder && !isOver && (
+                          <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            🟢 Óptimo
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

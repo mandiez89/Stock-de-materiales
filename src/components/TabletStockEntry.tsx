@@ -220,7 +220,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                   ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300'
                   : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200'
               }`}
-              title="Sincronizar de inmediato con Google Sheets"
+              title="Sincronizar de inmediato con la nube"
             >
               {sync.status === 'syncing' ? (
                 <>
@@ -230,7 +230,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
               ) : sync.status === 'synced' ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
-                  <span className="text-[11px] hidden sm:inline">Sheets al día</span>
+                  <span className="text-[11px] hidden sm:inline">Nube al día</span>
                   <span className="text-[11px] sm:hidden">Al día</span>
                 </>
               ) : sync.status === 'error' ? (
@@ -255,20 +255,20 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             <span className="font-medium text-slate-600 truncate">
               {!sync.configured ? (
-                <span className="text-amber-700 font-bold">Sin conexión a Google Sheets: los datos se guardan solo en esta tablet</span>
+                <span className="text-amber-700 font-bold">Modo local: los datos se guardan solo en esta tablet</span>
               ) : sync.autoSync ? (
                 sync.status === 'syncing' ? (
                   <span className="text-amber-700 font-bold flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 animate-spin inline" /> Guardando en Google Sheets de inmediato...
+                    <RefreshCw className="w-3 h-3 animate-spin inline" /> Guardando en la nube de inmediato...
                   </span>
                 ) : sync.status === 'pending' || sync.pendingCount > 0 ? (
-                  <span className="text-indigo-600 font-medium">{sync.pendingCount} cambio(s) pendientes de enviar a Sheets...</span>
+                  <span className="text-indigo-600 font-medium">{sync.pendingCount} cambio(s) pendientes de sincronizar...</span>
                 ) : sync.lastSyncedAt ? (
                   <span>
-                    Guardado en Google Sheets a las <strong className="text-slate-700 font-mono">{sync.lastSyncedAt}</strong>
+                    Guardado en la nube a las <strong className="text-slate-700 font-mono">{sync.lastSyncedAt}</strong>
                   </span>
                 ) : (
-                  <span>Sincronización inmediata a Google Sheets activa</span>
+                  <span>Autoguardado en la nube activo</span>
                 )
               ) : (
                 <span>Autoguardado inmediato pausado</span>
@@ -283,7 +283,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
               onChange={(e) => sync.setAutoSync(e.target.checked)}
               className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
             />
-            <span className="hidden sm:inline">Sheets Inmediato</span>
+            <span className="hidden sm:inline">Autoguardado inmediato</span>
           </label>
         </div>
       </div>
@@ -650,7 +650,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
             ) : (
               <>
                 <SendHorizontal className="w-3.5 h-3.5" />
-                <span>Sincronizar Sheets</span>
+                <span>Sincronizar Nube</span>
               </>
             )}
           </button>
