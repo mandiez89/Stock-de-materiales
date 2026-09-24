@@ -17,7 +17,7 @@ import { syncWithGoogleSheets } from './services/sheetsSync';
 
 export default function App() {
   // By default, the app ALWAYS opens in Tablet Mode (operator).
-  // The Admin portal is kept separate and secured with PIN 1458.
+  // The Admin portal is kept separate behind a PIN.
   const [userRole, setUserRole] = useState<UserRole>('operator');
 
   // Navigation: default view is 'entry' (Planilla de Carga Tablet)
@@ -40,19 +40,23 @@ export default function App() {
   }, [monthlyFactors, currentMonthIndex]);
 
   // Raw items state (includes per-month min/max matrix for all 52 products)
+  // Saved items are merged by id, so adding/removing a product in the catalog
+  // no longer discards every stored count.
   const [rawItems, setRawItems] = useState<MaterialItem[]>(() => {
-    const saved = localStorage.getItem('sugestion_raw_items_v3');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === RAW_MATERIALS_FROM_SHEET.length) {
-          return parsed;
-        }
-      } catch (e) {
-        // ignore
+    const catalog = RAW_MATERIALS_FROM_SHEET as unknown as MaterialItem[];
+    try {
+      const parsed = JSON.parse(localStorage.getItem('sugestion_raw_items_v3') || 'null');
+      if (Array.isArray(parsed)) {
+        const savedById = new Map<string, MaterialItem>(parsed.map((i: MaterialItem) => [i.id, i]));
+        return catalog.map((item) => {
+          const saved = savedById.get(item.id);
+          return saved ? { ...item, ...saved } : item;
+        });
       }
+    } catch {
+      // ignore corrupt storage
     }
-    return RAW_MATERIALS_FROM_SHEET as unknown as MaterialItem[];
+    return catalog;
   });
 
   // Auto-save raw items to localStorage
@@ -92,22 +96,31 @@ export default function App() {
     setRawItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
+          // newBultos is the item total; with several batches apply only the difference to the first one
           let updatedBatches = item.batches;
           if (updatedBatches && updatedBatches.length > 0) {
+            const currentTotal = updatedBatches.reduce((acc, b) => acc + (b.bultos || 0), 0);
+            const first = updatedBatches[0];
             updatedBatches = [
-              { ...updatedBatches[0], bultos: newBultos },
+              { ...first, bultos: Math.max(0, (first.bultos || 0) + newBultos - currentTotal) },
               ...updatedBatches.slice(1),
             ];
           }
           const totalUnits = updatedBatches && updatedBatches.length > 0
             ? updatedBatches.reduce((acc, b) => acc + ((b.bultos || 0) * (b.unitsPerBulto || 0)), 0)
             : newBultos * item.unitsPerBulto;
+          // Material arrived: clear the "ordered" flag, same as the tablet does
+          const arrived =
+            item.isOrdered && item.orderedStockSnapshot !== undefined && totalUnits > item.orderedStockSnapshot;
           return {
             ...item,
-            bultos: newBultos,
+            bultos: updatedBatches && updatedBatches.length > 0
+              ? updatedBatches.reduce((acc, b) => acc + (b.bultos || 0), 0)
+              : newBultos,
             batches: updatedBatches,
             totalUnits,
             isDirectUnits: false,
+            ...(arrived && { isOrdered: false, orderedAt: undefined, orderedStockSnapshot: undefined }),
           };
         }
         return item;

@@ -44,4 +44,4 @@ GitHub por defecto almacena el código fuente, no ejecuta aplicaciones web direc
 - **Portal Operador (Tablet)**: Permite registrar el stock mensual por bultos o por unidades directas. La interfaz está bloqueada para evitar modificaciones en compras o fórmulas.
   - URL directa: `tu-enlace/#operador`
 - **Portal Administrador**: Muestra el tablero de control, estado crítico, cálculo de reposición en unidades y ajustes de factores estacionales.
-  - PIN por defecto: `1234`
+  - PIN por defecto: `1458` (configurable con la variable `VITE_ADMIN_PIN` al compilar). Es una barrera de uso, no seguridad real: el PIN viaja en el código del navegador.

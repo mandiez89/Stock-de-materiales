@@ -35,7 +35,9 @@ interface HeaderProps {
   sheetsConnected: boolean;
 }
 
-const ADMIN_PIN = '1458';
+// Client-side gate only: it keeps operators out of admin screens but is not real
+// security (anything shipped to the browser can be read). Override via VITE_ADMIN_PIN.
+const ADMIN_PIN: string = import.meta.env.VITE_ADMIN_PIN || '1458';
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
@@ -56,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [pinError, setPinError] = useState(false);
 
   const checkPin = (code: string) => {
-    if (code === ADMIN_PIN || code.toLowerCase() === 'mariano') {
+    if (code === ADMIN_PIN) {
       setUserRole('admin');
       setActiveTab('dashboard');
       setIsPinModalOpen(false);
@@ -313,7 +315,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Admin Unlock Modal (PIN Protected: 1458) */}
+      {/* Admin Unlock Modal (PIN Protected) */}
       {isPinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-xs sm:max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 text-slate-800 animate-fade-in">
@@ -352,7 +354,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               {pinError && (
                 <p className="text-sm text-rose-600 mt-2 font-bold text-center">
-                  PIN incorrecto. Ingresa el PIN 1458.
+                  PIN incorrecto. Intenta nuevamente.
                 </p>
               )}
             </div>
@@ -371,7 +373,7 @@ export const Header: React.FC<HeaderProps> = ({
                     setPinInput(val);
                     setPinError(false);
                     if (val.length === 4) {
-                      checkPin(val);
+                      if (!checkPin(val)) setPinError(true);
                     }
                   }}
                   placeholder="••••"
@@ -417,7 +419,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                <span className="text-xs text-slate-500 font-medium">PIN: <strong className="text-slate-800 font-mono text-sm">1458</strong></span>
+                <span className="text-xs text-slate-500 font-medium">Ingresa el PIN de 4 dígitos</span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"

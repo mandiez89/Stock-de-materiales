@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Tablet, 
-  RotateCcw, 
   SendHorizontal, 
   Search, 
   Plus, 
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react';
 import { MaterialItem, MaterialCategory, MonthlyFactor, BultoBatch } from '../types';
 import confetti from 'canvas-confetti';
+import { computeStockStatus } from '../data/initialData';
 
 interface TabletStockEntryProps {
   items: MaterialItem[];
@@ -89,27 +89,14 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   onSaveBatch,
   onSyncWithSheets,
 }) => {
-  // Local form items (persisted to localStorage)
-  const [formItems, setFormItems] = useState<MaterialItem[]>(() => {
-    const saved = localStorage.getItem('sugestion_tablet_draft_v4');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item: MaterialItem) => ({
-            ...item,
-            batches: normalizeBatches(item),
-          }));
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-    return items.map((item) => ({
+  // Local form items, initialized from the app state (already persisted by App).
+  // A separate tablet draft used to overwrite edits made from the dashboard.
+  const [formItems, setFormItems] = useState<MaterialItem[]>(() =>
+    items.map((item) => ({
       ...item,
       batches: normalizeBatches(item),
-    }));
-  });
+    }))
+  );
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -143,24 +130,9 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     localStorage.setItem('sugestion_autosync_sheets', String(autoSyncEnabled));
   }, [autoSyncEnabled]);
 
-  // Recalculate status and units to order
-  const computeItemStatus = (totalUnits: number, minStockAdjusted: number, maxStockAdjusted: number) => {
-    let status: MaterialItem['status'] = 'OPTIMO';
-    let unitsToOrder = 0;
-
-    if (totalUnits <= minStockAdjusted * 0.5) {
-      status = 'CRITICO';
-      unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
-    } else if (totalUnits < minStockAdjusted) {
-      status = 'PEDIR';
-      unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
-    } else if (totalUnits > maxStockAdjusted * 1.25) {
-      status = 'SOBRESTOCK';
-      unitsToOrder = 0;
-    }
-
-    return { status, unitsToOrder };
-  };
+  // Recalculate status and units to order (same rules as the dashboard)
+  const computeItemStatus = (item: MaterialItem, totalUnits: number) =>
+    computeStockStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted, item.supplierLeadTimeDays);
 
   // Helper to recompute totals from batches
   const recalculateItemBatches = (item: MaterialItem, updatedBatches: BultoBatch[]): MaterialItem => {
@@ -168,7 +140,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
     const calculatedUnits = updatedBatches.reduce((acc, b) => acc + ((b.bultos || 0) * (b.unitsPerBulto || 0)), 0);
     const totalUnits = item.allowDirectTotal ? item.totalUnits : calculatedUnits;
     
-    const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+    const { status, unitsToOrder } = computeItemStatus(item, totalUnits);
     const primaryUnitsPerBulto = updatedBatches[0]?.unitsPerBulto || item.unitsPerBulto;
     const bultosToOrder = unitsToOrder > 0 && primaryUnitsPerBulto > 0
       ? Math.ceil(unitsToOrder / primaryUnitsPerBulto)
@@ -243,7 +215,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
 
   // Auto-save to localStorage, parent state, and trigger IMMEDIATE debounced Sheets sync
   useEffect(() => {
-    localStorage.setItem('sugestion_tablet_draft_v4', JSON.stringify(formItems));
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     setLastSavedTime(nowTime);
 
@@ -384,7 +355,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           const currentBatches = normalizeBatches(item);
           const calculatedUnits = currentBatches.reduce((acc, b) => acc + (b.bultos * b.unitsPerBulto), 0);
           const totalUnits = next ? item.totalUnits : calculatedUnits;
-          const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+          const { status, unitsToOrder } = computeItemStatus(item, totalUnits);
           const primaryUnits = currentBatches[0]?.unitsPerBulto || item.unitsPerBulto;
           const bultosToOrder = unitsToOrder > 0 && primaryUnits > 0
             ? Math.ceil(unitsToOrder / primaryUnits)
@@ -415,7 +386,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           const currentBatches = normalizeBatches(item);
           const primaryUnits = currentBatches[0]?.unitsPerBulto || item.unitsPerBulto || 1;
           const approxBultos = Math.floor(totalUnits / primaryUnits);
-          const { status, unitsToOrder } = computeItemStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted);
+          const { status, unitsToOrder } = computeItemStatus(item, totalUnits);
           const bultosToOrder = unitsToOrder > 0 && primaryUnits > 0
             ? Math.ceil(unitsToOrder / primaryUnits)
             : 0;
@@ -463,15 +434,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   const totalBultosCounted = useMemo(() => {
     return formItems.reduce((acc, item) => acc + (item.bultos || 0), 0);
   }, [formItems]);
-
-  // Reset draft to initial items
-  const handleResetDraft = () => {
-    if (window.confirm('¿Deseas reiniciar el stock a los valores originales iniciales?')) {
-      const reset = items.map((i) => ({ ...i, batches: normalizeBatches(i) }));
-      setFormItems(reset);
-      localStorage.removeItem('sugestion_tablet_draft_v4');
-    }
-  };
 
   // Force Manual Immediate Sync
   const handleForceManualSync = () => {
@@ -549,13 +511,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
               )}
             </button>
 
-            <button
-              onClick={handleResetDraft}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-              title="Restaurar valores de stock"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
