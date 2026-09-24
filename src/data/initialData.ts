@@ -489,11 +489,13 @@ export function computeMaterialCalculations(
   let isOrdered = rawItem.isOrdered ?? false;
   let orderedAt = rawItem.orderedAt;
   let orderedStockSnapshot = rawItem.orderedStockSnapshot;
+  let orderedUnits = rawItem.orderedUnits;
 
   if (isOrdered && orderedStockSnapshot !== undefined && totalUnits > orderedStockSnapshot) {
     isOrdered = false;
     orderedAt = undefined;
     orderedStockSnapshot = undefined;
+    orderedUnits = undefined;
   }
 
   return {
@@ -508,6 +510,7 @@ export function computeMaterialCalculations(
     isOrdered,
     orderedAt,
     orderedStockSnapshot,
+    orderedUnits,
   };
 }
 

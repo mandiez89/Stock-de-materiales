@@ -49,14 +49,15 @@ export function normalizeRawItem(item: MaterialItem, monthNumber: number): Mater
     isOrdered: c.isOrdered,
     orderedAt: c.orderedAt,
     orderedStockSnapshot: c.orderedStockSnapshot,
+    orderedUnits: c.orderedUnits,
   };
 }
 
 const isNewer = (a?: string, b?: string) => !!a && (!b || a > b);
 
 /**
- * Applies stock from Google Sheets. Remote wins only when it is newer and the item has
- * no local edits waiting to be sent.
+ * Applies stock from database / Google Sheets. Remote wins when it is newer or when an order
+ * status was updated on the shared database and the item has no pending local unsent edits.
  */
 export function applyRemoteStock(
   local: MaterialItem[],
@@ -67,12 +68,21 @@ export function applyRemoteStock(
   let changed = 0;
   const items = local.map((item) => {
     const r = byId.get(item.id);
-    if (!r || dirtyIds.has(item.id) || !isNewer(r.lastUpdated ?? undefined, item.lastUpdated)) return item;
+    if (!r || dirtyIds.has(item.id)) return item;
+
+    const remoteIsNewer = isNewer(r.lastUpdated ?? undefined, item.lastUpdated);
+    const orderStatusChanged =
+      r.isOrdered !== undefined &&
+      r.isOrdered !== item.isOrdered &&
+      (!item.lastUpdated || isNewer(r.orderedAt ?? r.lastUpdated ?? undefined, item.orderedAt));
+
+    if (!remoteIsNewer && !orderStatusChanged) return item;
+
     changed++;
     const next: MaterialItem = { ...item };
     (Object.keys(r) as (keyof RemoteStockItem)[]).forEach((key) => {
       if (key === 'id') return;
-      // null from the sheet means "not set"
+      // null from the database/sheet means "not set"
       (next as any)[key] = r[key] === null ? undefined : r[key];
     });
     if (next.batches === undefined) delete next.batches;

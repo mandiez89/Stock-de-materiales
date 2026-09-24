@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Printer, ShoppingCart, AlertCircle, Layers, FileText, Table as TableIcon } from 'lucide-react';
+import { 
+  X, 
+  Copy, 
+  Check, 
+  Printer, 
+  ShoppingCart, 
+  AlertCircle, 
+  Layers, 
+  FileText, 
+  Table as TableIcon,
+  Truck,
+  Database,
+  RefreshCw
+} from 'lucide-react';
 import { MaterialItem, MaterialCategory } from '../types';
 import { formatMultipleOrdersText, formatSingleOrderItemText } from '../utils/orderFormat';
 import confetti from 'canvas-confetti';
@@ -9,6 +22,8 @@ interface PurchaseOrderModalProps {
   onClose: () => void;
   itemsToOrder: MaterialItem[];
   monthName: string;
+  onMarkBatchOrdered?: (items: MaterialItem[]) => Promise<void> | void;
+  onToggleOrdered?: (id: string, isOrdered: boolean) => Promise<void> | void;
 }
 
 export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
@@ -16,11 +31,15 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   onClose,
   itemsToOrder,
   monthName,
+  onMarkBatchOrdered,
+  onToggleOrdered,
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'preview'>('table');
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const [savedBatchSuccess, setSavedBatchSuccess] = useState(false);
 
   if (!isOpen) return null;
 
@@ -53,6 +72,21 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleRegisterBatch = async () => {
+    if (!onMarkBatchOrdered || filteredItems.length === 0 || isSavingBatch) return;
+    setIsSavingBatch(true);
+    try {
+      await onMarkBatchOrdered(filteredItems);
+      setSavedBatchSuccess(true);
+      confetti({ particleCount: 70, spread: 70, origin: { y: 0.7 } });
+      setTimeout(() => setSavedBatchSuccess(false), 4000);
+    } catch {
+      // handled in parent
+    } finally {
+      setIsSavingBatch(false);
+    }
   };
 
   return (
@@ -195,6 +229,7 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                       Cantidad Solicitada
                     </th>
                     <th className="py-3 px-4 text-center">Urgencia</th>
+                    <th className="py-3 px-4 text-center">Estado en Base de Datos</th>
                     <th className="py-3 px-3 text-center">Copiar Individual</th>
                   </tr>
                 </thead>
@@ -234,6 +269,24 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                               Reposición
                             </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {item.isOrdered ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-800 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-300">
+                              <Truck className="w-3 h-3 text-sky-600" /> Pedido Registrado
+                            </span>
+                          ) : onToggleOrdered ? (
+                            <button
+                              type="button"
+                              onClick={() => onToggleOrdered(item.id, true)}
+                              className="px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border border-sky-300 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                              title="Marcar pedido en la base de datos central"
+                            >
+                              <Truck className="w-3 h-3 text-sky-600" /> Marcar Pedido
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium">Pendiente</span>
                           )}
                         </td>
                         <td className="py-3 px-3 text-center">
@@ -285,6 +338,33 @@ export const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
               <Printer className="w-4 h-4 text-slate-500" />
               <span>Imprimir</span>
             </button>
+
+            {onMarkBatchOrdered && (
+              <button
+                type="button"
+                onClick={handleRegisterBatch}
+                disabled={filteredItems.length === 0 || isSavingBatch}
+                className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                title="Cargar y registrar estos pedidos en la base de datos central"
+              >
+                {isSavingBatch ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Guardando en BD...</span>
+                  </>
+                ) : savedBatchSuccess ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" />
+                    <span>¡Guardado en BD!</span>
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-4 h-4" />
+                    <span>Registrar en Base de Datos</span>
+                  </>
+                )}
+              </button>
+            )}
 
             <button
               onClick={handleCopy}

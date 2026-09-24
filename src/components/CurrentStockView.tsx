@@ -288,6 +288,11 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
                               Carga Manual
                             </span>
                           )}
+                          {item.isOrdered && (
+                            <span className="text-[11px] bg-sky-100 text-sky-900 font-bold px-2 py-0.5 rounded-lg border border-sky-300 inline-flex items-center gap-1 shadow-2xs">
+                              🚚 Pedido en Base de Datos {item.orderedUnits ? `(${item.orderedUnits.toLocaleString('es-AR')} un.)` : ''}
+                            </span>
+                          )}
                         </div>
                         {item.notes && (
                           <span className="text-xs text-slate-500 font-medium block mt-0.5">
@@ -326,22 +331,23 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
 
                       {/* Status Badge */}
                       <td className="py-3.5 px-4 text-center">
-                        {isCritical && (
+                        {item.isOrdered ? (
+                          <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-sky-100 text-sky-900 border border-sky-300">
+                            🚚 Pedido en Curso
+                          </span>
+                        ) : isCritical ? (
                           <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-900 border border-rose-300">
                             🔴 Crítico
                           </span>
-                        )}
-                        {isReorder && (
+                        ) : isReorder ? (
                           <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
                             🟡 Reponer
                           </span>
-                        )}
-                        {isOver && (
+                        ) : isOver ? (
                           <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-blue-100 text-blue-900 border border-blue-300">
                             🔵 Sobrestock
                           </span>
-                        )}
-                        {!isCritical && !isReorder && !isOver && (
+                        ) : (
                           <span className="inline-block px-3 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
                             🟢 Óptimo
                           </span>

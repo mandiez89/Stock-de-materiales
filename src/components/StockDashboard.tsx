@@ -583,21 +583,27 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                       {/* Order Tracking Action: Marcar pedido / Recibido / Cancelar */}
                       <td className="py-3 px-3 text-center">
                         {isOrdered ? (
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              onClick={() => onToggleOrdered?.(item.id, false)}
-                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors active:scale-95"
-                              title="Marcar como recibido en fábrica"
-                            >
-                              <Check className="w-3 h-3" /> Recibido
-                            </button>
-                            <button
-                              onClick={() => onToggleOrdered?.(item.id, false)}
-                              className="w-6 h-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition-colors cursor-pointer"
-                              title="Cancelar estado de pedido"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => onToggleOrdered?.(item.id, false)}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors active:scale-95"
+                                title="Marcar como recibido en fábrica (actualiza base de datos central)"
+                              >
+                                <Check className="w-3 h-3" /> Recibido
+                              </button>
+                              <button
+                                onClick={() => onToggleOrdered?.(item.id, false)}
+                                className="w-6 h-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+                                title="Cancelar estado de pedido en base de datos"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <span className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+                              En Base de Datos
+                            </span>
                           </div>
                         ) : (isReorder || isCritical) ? (
                           <div className="inline-flex items-center gap-1 justify-center">
@@ -620,7 +626,7 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                             <button
                               onClick={() => onToggleOrdered?.(item.id, true)}
                               className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white rounded-lg text-[11px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer transition-all active:scale-95 whitespace-nowrap"
-                              title="Marcar que ya se realizó el pedido a compras/proveedor"
+                              title="Cargar y registrar pedido en la base de datos central (visible para todos los que accedan)"
                             >
                               <Truck className="w-3 h-3" /> Marcar Pedido
                             </button>

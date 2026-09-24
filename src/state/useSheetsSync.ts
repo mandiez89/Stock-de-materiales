@@ -101,11 +101,37 @@ export function useSheetsSync(params: {
       setStatus('syncing');
       try {
         const sent = new Map(items.map((i) => [i.id, i.lastUpdated]));
-        const result = await callSheets('UPDATE_STOCK', { items, metadata });
-        if (!result.success) {
-          fail(result.message);
+        let ok = false;
+
+        // 1. If Google Sheets is configured, update Sheets
+        if (isSheetsConfigured()) {
+          const result = await callSheets('UPDATE_STOCK', { items, metadata });
+          if (!result.success) {
+            fail(result.message);
+          } else {
+            ok = true;
+          }
+        }
+
+        // 2. Always persist to the central server database
+        try {
+          const sRes = await fetch('/api/sync-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items }),
+          });
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (sData.success) ok = true;
+          }
+        } catch {
+          // offline
+        }
+
+        if (!ok && isSheetsConfigured()) {
           return false;
         }
+
         // Only clear items that were not edited again while the request was in flight
         const current = new Map(computedRef.current.map((i) => [i.id, i.lastUpdated]));
         setDirtyIds((prev) => {
@@ -130,36 +156,65 @@ export function useSheetsSync(params: {
   );
 
   const pull = useCallback(async () => {
-    if (!isSheetsConfigured()) return;
-    const result = await callSheets('GET_STATE');
-    if (!result.success) {
-      fail(result.message);
-      return;
+    let remoteItems: RemoteStockItem[] = [];
+    let remoteMinMax: RemoteMinMax | null = null;
+
+    // 1. Check Google Sheets if configured
+    if (isSheetsConfigured()) {
+      try {
+        const result = await callSheets('GET_STATE');
+        if (result.success) {
+          remoteItems = result.details?.items || [];
+          remoteMinMax = result.details?.minMax || null;
+        }
+      } catch {
+        // sheets error
+      }
     }
-    const remoteItems: RemoteStockItem[] = result.details?.items || [];
-    const remoteMinMax: RemoteMinMax | null = result.details?.minMax || null;
-    setRawItems((prev) => {
-      let next = applyRemoteStock(prev, remoteItems, dirtyRef.current).items;
-      if (!minMaxDirtyRef.current) next = applyRemoteMinMax(next, remoteMinMax);
-      return next;
-    });
-    if (dirtyRef.current.size === 0) markSynced();
+
+    // 2. Also check server shared state for multi-device synchronization
+    try {
+      const sRes = await fetch('/api/shared-state');
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        if (sData.success && Array.isArray(sData.items) && sData.items.length > 0) {
+          const map = new Map(remoteItems.map((i) => [String(i.id), i]));
+          sData.items.forEach((sItem: any) => {
+            const existing = map.get(String(sItem.id));
+            if (!existing || (sItem.lastUpdated && (!existing.lastUpdated || sItem.lastUpdated >= existing.lastUpdated))) {
+              map.set(String(sItem.id), sItem);
+            }
+          });
+          remoteItems = Array.from(map.values());
+        }
+      }
+    } catch {
+      // offline or local
+    }
+
+    if (remoteItems.length > 0) {
+      setRawItems((prev) => {
+        let next = applyRemoteStock(prev, remoteItems, dirtyRef.current).items;
+        if (!minMaxDirtyRef.current && remoteMinMax) next = applyRemoteMinMax(next, remoteMinMax);
+        return next;
+      });
+      if (dirtyRef.current.size === 0) markSynced();
+    }
   }, [setRawItems]);
 
   // Debounced auto-push of local edits
   useEffect(() => {
-    if (!configured || !autoSync || dirtyIds.size === 0) return;
+    if (!autoSync || dirtyIds.size === 0) return;
     setStatus((s) => (s === 'syncing' ? s : 'pending'));
     const timer = setTimeout(() => {
       const pending = computedRef.current.filter((i) => dirtyRef.current.has(i.id));
       if (pending.length > 0) void push(pending);
     }, PUSH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [configured, autoSync, dirtyIds, computedItems, push]);
+  }, [autoSync, dirtyIds, computedItems, push]);
 
-  // Periodic pull, plus on focus and reconnection
+  // Periodic pull, plus on focus and reconnection (always active to keep database in sync)
   useEffect(() => {
-    if (!configured) return;
     void pull();
     const interval = setInterval(() => void pull(), PULL_INTERVAL_MS);
     const onVisible = () => {
@@ -177,7 +232,7 @@ export function useSheetsSync(params: {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
     };
-  }, [configured, pull, push]);
+  }, [pull, push]);
 
   const setAutoSync = (value: boolean) => {
     setAutoSyncState(value);
@@ -186,12 +241,8 @@ export function useSheetsSync(params: {
 
   const syncNow = useCallback(
     async (metadata?: Record<string, unknown>) => {
-      if (!isSheetsConfigured()) {
-        fail('La sincronización en la nube no está configurada en este dispositivo.');
-        return false;
-      }
       const items = computedRef.current;
-      return push(items, {
+      const ok = await push(items, {
         date: new Date().toLocaleDateString('es-AR'),
         month: monthName,
         criticalCount: items.filter((i) => i.status === 'CRITICO').length,
@@ -200,8 +251,13 @@ export function useSheetsSync(params: {
         ...metadata,
         logHistory: true,
       });
+      if (ok) {
+        await pull();
+        return true;
+      }
+      return false;
     },
-    [push, monthName]
+    [push, pull, monthName]
   );
 
   const refreshConfig = useCallback(() => {

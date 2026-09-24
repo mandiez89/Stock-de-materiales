@@ -16,7 +16,8 @@ import {
   CloudCheck,
   RefreshCw,
   Zap,
-  Check
+  Check,
+  Truck
 } from 'lucide-react';
 import { MaterialItem, MaterialCategory, MonthlyFactor, BultoBatch } from '../types';
 import confetti from 'canvas-confetti';
@@ -426,6 +427,17 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                               {item.notes}
                             </p>
                           )}
+                          {item.isOrdered && (
+                            <div className="flex items-center gap-1.5 bg-sky-50 border border-sky-300 text-sky-950 px-2.5 py-1 rounded-xl text-xs font-bold mt-1.5 shadow-2xs">
+                              <Truck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                              <span>
+                                Pedido en camino{item.orderedUnits ? `: ${item.orderedUnits.toLocaleString('es-AR')} un.` : ''}
+                              </span>
+                              <span className="text-[10px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-semibold ml-auto">
+                                En Base de Datos
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* High-Contrast Stock Total Display */}
@@ -469,96 +481,112 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                                 </div>
                               )}
 
-                              {/* MAIN TOUCH CONTROL STRIP (Thumb-Friendly in Portrait) */}
-                              <div className="grid grid-cols-12 gap-1.5 items-center">
-                                {/* BIG RED BUTTON: ABRIR 1 BULTO (DESCONTAR) */}
-                                <div className="col-span-4 sm:col-span-4">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStepBatchBultos(item.id, batch.id, -1)}
-                                    disabled={batch.bultos <= 0}
-                                    className="w-full h-12 sm:h-13 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200 disabled:opacity-30 disabled:cursor-not-allowed border-2 border-rose-300 text-rose-700 flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 shadow-2xs select-none"
-                                    title="Abrir 1 bulto para usar en empaque"
-                                  >
-                                    <div className="flex items-center gap-1">
-                                      <Minus className="w-4 h-4 stroke-[3]" />
-                                      <span className="font-mono font-black text-base">1</span>
-                                    </div>
-                                    <span className="text-[9px] font-black uppercase tracking-tight text-rose-600">
-                                      Abrir Bulto
-                                    </span>
-                                  </button>
-                                </div>
-
-                                {/* BULTOS COUNT DISPLAY & DIRECT INPUT */}
-                                <div className="col-span-4 sm:col-span-4 text-center">
-                                  <div className="flex flex-col items-center justify-center">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase">
-                                      Bultos
-                                    </span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      value={batch.bultos}
-                                      onChange={(e) =>
-                                        handleSetBatchBultos(item.id, batch.id, parseInt(e.target.value, 10))
-                                      }
-                                      className="w-full max-w-[90px] h-10 text-center font-mono font-black text-xl sm:text-2xl border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden bg-slate-50 text-slate-900 shadow-inner"
-                                      title="Cantidad de bultos cerrados"
-                                    />
-                                    <span className="text-[10px] font-bold text-slate-500 mt-0.5">
-                                      cerrados
-                                    </span>
+                              {/* MAIN TOUCH CONTROL STRIP (Thumb-Friendly, Balanced 4-Column Layout) */}
+                              <div className="grid grid-cols-4 gap-1.5 sm:gap-2 items-stretch">
+                                {/* BUTTON 1: ABRIR 1 BULTO (DESCONTAR) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepBatchBultos(item.id, batch.id, -1)}
+                                  disabled={batch.bultos <= 0}
+                                  className={`h-16 rounded-2xl flex flex-col items-center justify-center transition-all select-none cursor-pointer border ${
+                                    batch.bultos <= 0
+                                      ? 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed shadow-none'
+                                      : 'bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:from-rose-700 active:to-rose-800 text-white shadow-sm hover:shadow active:scale-95 border-rose-600'
+                                  }`}
+                                  title="Abrir 1 bulto para usar en empaque (-1)"
+                                >
+                                  <div className="flex items-center gap-0.5 leading-none">
+                                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span className="font-mono font-black text-lg">1</span>
                                   </div>
+                                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight mt-0.5 leading-none">
+                                    Abrir Bulto
+                                  </span>
+                                  <span className="text-[8px] font-semibold opacity-85 mt-0.5 leading-none">
+                                    Empaque
+                                  </span>
+                                </button>
+
+                                {/* ELEMENT 2: BULTOS CERRADOS COUNT & DIRECT INPUT */}
+                                <div className="h-16 bg-white border-2 border-slate-200 hover:border-slate-300 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 rounded-2xl px-1 py-1 flex flex-col items-center justify-center transition-all shadow-inner text-center">
+                                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 leading-none">
+                                    Bultos
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={batch.bultos}
+                                    onChange={(e) =>
+                                      handleSetBatchBultos(item.id, batch.id, parseInt(e.target.value, 10))
+                                    }
+                                    className="w-full text-center font-mono font-black text-2xl sm:text-3xl text-slate-900 bg-transparent outline-hidden leading-tight p-0 mt-0.5"
+                                    title="Cantidad de bultos cerrados (clic para editar)"
+                                  />
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tight leading-none">
+                                    Cerrados
+                                  </span>
                                 </div>
 
-                                {/* PLUS BUTTONS (SUMAR BULTOS) */}
-                                <div className="col-span-4 sm:col-span-4 grid grid-cols-2 gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStepBatchBultos(item.id, batch.id, 1)}
-                                    className="h-12 sm:h-13 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 shadow-2xs select-none"
-                                    title="Ingresar / Sumar 1 bulto"
-                                  >
-                                    <Plus className="w-4 h-4 stroke-[3]" />
-                                    <span className="text-[9px] font-black uppercase tracking-tight text-indigo-100">
-                                      +1 Bto
-                                    </span>
-                                  </button>
+                                {/* BUTTON 3: +1 BTO (SUMAR 1 BULTO) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepBatchBultos(item.id, batch.id, 1)}
+                                  className="h-16 rounded-2xl bg-gradient-to-b from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 active:from-emerald-700 active:to-emerald-800 text-white flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm hover:shadow border border-emerald-700 select-none"
+                                  title="Sumar 1 bulto cerrado (+1)"
+                                >
+                                  <div className="flex items-center gap-0.5 leading-none">
+                                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span className="font-mono font-black text-lg">1</span>
+                                  </div>
+                                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight mt-0.5 text-emerald-100 leading-none">
+                                    +1 Bto
+                                  </span>
+                                  <span className="text-[8px] font-semibold text-emerald-200/90 mt-0.5 leading-none">
+                                    Entrada
+                                  </span>
+                                </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStepBatchBultos(item.id, batch.id, 5)}
-                                    className="h-12 sm:h-13 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 border border-slate-300 flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 shadow-2xs select-none"
-                                    title="Ingresar 5 bultos rápidamente"
-                                  >
-                                    <span className="font-mono font-black text-sm text-slate-800">+5</span>
-                                    <span className="text-[8px] font-bold text-slate-500 uppercase">
-                                      Rápido
-                                    </span>
-                                  </button>
-                                </div>
+                                {/* BUTTON 4: +5 RÁPIDO (SUMAR 5 BULTOS) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepBatchBultos(item.id, batch.id, 5)}
+                                  className="h-16 rounded-2xl bg-gradient-to-b from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:from-indigo-700 active:to-indigo-800 text-white flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm hover:shadow border border-indigo-700 select-none"
+                                  title="Sumar 5 bultos cerrados rápidamente (+5)"
+                                >
+                                  <div className="flex items-center gap-0.5 leading-none">
+                                    <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
+                                    <span className="font-mono font-black text-lg text-white">+5</span>
+                                  </div>
+                                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight mt-0.5 text-indigo-100 leading-none">
+                                    Rápido
+                                  </span>
+                                  <span className="text-[8px] font-semibold text-indigo-200/90 mt-0.5 leading-none">
+                                    +5 Btos
+                                  </span>
+                                </button>
                               </div>
 
                               {/* BATCH CALCULATION BAR (Multiplication & Subtotal) */}
-                              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100">
-                                <div className="flex items-center gap-1 text-slate-600">
-                                  <span className="text-slate-400 font-bold">Medida:</span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    value={batch.unitsPerBulto}
-                                    onChange={(e) =>
-                                      handleSetBatchUnitsPerBulto(item.id, batch.id, parseInt(e.target.value, 10))
-                                    }
-                                    className="w-16 h-7 text-center font-mono font-bold text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 bg-white text-slate-800"
-                                  />
-                                  <span className="text-[10px] text-slate-500 font-semibold">un/bto</span>
+                              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200/70">
+                                <div className="flex items-center gap-1.5 text-slate-600">
+                                  <span className="font-bold text-slate-500 text-[11px]">Medida:</span>
+                                  <div className="inline-flex items-center bg-white border border-slate-300 rounded-lg px-2 py-0.5 shadow-2xs focus-within:border-indigo-500">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={batch.unitsPerBulto}
+                                      onChange={(e) =>
+                                        handleSetBatchUnitsPerBulto(item.id, batch.id, parseInt(e.target.value, 10))
+                                      }
+                                      className="w-12 text-center font-mono font-bold text-xs text-slate-900 bg-transparent outline-hidden"
+                                    />
+                                    <span className="text-[10px] text-slate-400 font-semibold ml-1">un/bto</span>
+                                  </div>
                                 </div>
 
                                 <div className="text-right">
                                   <span className="text-[10px] text-slate-400 font-medium mr-1">Subtotal:</span>
-                                  <span className="font-mono font-black text-xs sm:text-sm text-slate-800">
+                                  <span className="font-mono font-black text-xs sm:text-sm text-slate-900">
                                     {batchSubtotal.toLocaleString('es-AR')}
                                   </span>
                                   <span className="text-[10px] text-slate-500 ml-0.5">un.</span>

@@ -13,7 +13,7 @@ import { CurrentStockView } from './components/CurrentStockView';
 import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView';
 import { CloudSyncSettingsModal } from './components/CloudSyncSettingsModal';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
-import { callSheets } from './services/sheetsSync';
+import { callSheets, getSheetsConfig, isSheetsConfigured } from './services/sheetsSync';
 import { mergeMinMaxEdits, mergeSavedItems, normalizeRawItem } from './state/stockState';
 import {
   loadDirtyIds,
@@ -77,6 +77,29 @@ export default function App() {
   // Modals
   const [isPurchaseOrderOpen, setIsPurchaseOrderOpen] = useState(false);
   const [isCloudSettingsOpen, setIsCloudSettingsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  // Load live shared database state on initial render so all devices start in sync
+  useEffect(() => {
+    let active = true;
+    fetch('/api/shared-state')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data || !data.success || !Array.isArray(data.items) || data.items.length === 0) return;
+        setRawItems((prev) => applyRemoteStock(prev, data.items, loadDirtyIds()).items);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Dynamically compute adjusted items based on per-product monthly min/max
   const computedItems: MaterialItem[] = useMemo(() => {
@@ -141,13 +164,130 @@ export default function App() {
       };
     });
 
-  const handleToggleOrdered = (id: string, isOrdered: boolean) =>
+  const handleToggleOrdered = async (id: string, isOrdered: boolean) => {
+    const target = rawItems.find((i) => i.id === id);
+    const ts = new Date().toISOString();
+    const computedTarget = target ? computeMaterialCalculations(target, selectedMonth.factor, selectedMonth.month) : null;
+    const orderedUnits = isOrdered ? (computedTarget ? computedTarget.unitsToOrder : 0) : undefined;
+    const orderedStockSnapshot = isOrdered ? (target ? target.totalUnits : undefined) : undefined;
+    const orderedAt = isOrdered ? ts : undefined;
+
     updateItem(id, (item) => ({
       ...item,
       isOrdered,
-      orderedAt: isOrdered ? new Date().toISOString() : undefined,
-      orderedStockSnapshot: isOrdered ? item.totalUnits : undefined,
+      orderedAt,
+      orderedStockSnapshot,
+      orderedUnits,
     }));
+
+    // Save directly to the shared server database so any other tablet or PC sees the order immediately
+    try {
+      const cfg = getSheetsConfig();
+      const res = await fetch('/api/mark-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: id,
+          itemName: target?.name,
+          isOrdered,
+          orderedUnits: orderedUnits ?? 0,
+          orderedStockSnapshot,
+          orderedAt,
+          month: selectedMonth.name,
+          webhookUrl: cfg.webhookUrl,
+          accessToken: cfg.accessToken,
+        }),
+      });
+
+      if (res.ok) {
+        setToastMessage(
+          isOrdered
+            ? `✓ Pedido guardado en base de datos: ${target?.name || 'Material'}`
+            : `✓ Estado de pedido actualizado: ${target?.name || 'Material'}`
+        );
+      }
+    } catch {
+      // offline / local fallback
+      setToastMessage(
+        isOrdered
+          ? `✓ Pedido marcado localmente: ${target?.name || 'Material'}`
+          : `✓ Estado actualizado localmente: ${target?.name || 'Material'}`
+      );
+    }
+
+    // Also forward immediately to Google Sheets if configured
+    if (target && isSheetsConfigured()) {
+      const updatedItem = {
+        ...target,
+        isOrdered,
+        orderedAt,
+        orderedStockSnapshot,
+        orderedUnits,
+        lastUpdated: ts,
+      };
+      void callSheets('UPDATE_STOCK', { items: [updatedItem] });
+      if (isOrdered && orderedUnits && orderedUnits > 0) {
+        void callSheets('LOG_ORDER', {
+          order: {
+            month: selectedMonth.name,
+            items: [{ id: target.id, name: target.name, unitsToOrder: orderedUnits }],
+          },
+        });
+      }
+    }
+  };
+
+  const handleMarkBatchOrdered = async (items: MaterialItem[]) => {
+    if (!items || items.length === 0) return;
+    const ts = new Date().toISOString();
+    const batchOrders = items.map((item) => {
+      const computed = computeMaterialCalculations(item, selectedMonth.factor, selectedMonth.month);
+      return {
+        itemId: item.id,
+        itemName: item.name,
+        isOrdered: true,
+        orderedUnits: computed.unitsToOrder || 0,
+        orderedStockSnapshot: item.totalUnits,
+        orderedAt: ts,
+        month: selectedMonth.name,
+      };
+    });
+
+    const itemMap = new Map(batchOrders.map((o) => [o.itemId, o]));
+    setRawItems((prev) =>
+      prev.map((item) => {
+        const match = itemMap.get(item.id);
+        if (!match) return item;
+        return {
+          ...item,
+          isOrdered: true,
+          orderedAt: ts,
+          orderedStockSnapshot: match.orderedStockSnapshot,
+          orderedUnits: match.orderedUnits,
+          lastUpdated: ts,
+        };
+      })
+    );
+
+    try {
+      const cfg = getSheetsConfig();
+      const res = await fetch('/api/mark-orders-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orders: batchOrders,
+          webhookUrl: cfg.webhookUrl,
+          accessToken: cfg.accessToken,
+        }),
+      });
+
+      if (res.ok) {
+        setToastMessage(`✓ ${batchOrders.length} materiales registrados como pedidos en la base de datos central.`);
+      }
+    } catch {
+      setToastMessage(`✓ ${batchOrders.length} pedidos registrados localmente.`);
+    }
+  };
 
   // Min/max edits only touch configuration, never stock counts
   const handleUpdateItemsMinMax = (updatedItems: MaterialItem[]) => {
@@ -270,6 +410,8 @@ export default function App() {
         onClose={() => setIsPurchaseOrderOpen(false)}
         itemsToOrder={itemsToOrder}
         monthName={selectedMonth.name}
+        onMarkBatchOrdered={handleMarkBatchOrdered}
+        onToggleOrdered={handleToggleOrdered}
       />
 
       {/* Cloud Sync Settings Modal (Admin Only) */}
@@ -280,6 +422,20 @@ export default function App() {
         selectedMonth={selectedMonth}
         sync={sync}
       />
+
+      {/* Floating Database Sync Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900/95 backdrop-blur-md text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="flex-1">{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }
