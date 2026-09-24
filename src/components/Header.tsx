@@ -18,6 +18,8 @@ import {
   Delete
 } from 'lucide-react';
 import { MonthlyFactor, UserRole } from '../types';
+import { SheetsSyncState } from '../state/useSheetsSync';
+import { callSheets, isSheetsConfigured, setSessionAdminPin } from '../services/sheetsSync';
 
 export type AppTab = 'dashboard' | 'entry' | 'stock' | 'minmax' | 'sheets';
 
@@ -32,12 +34,13 @@ interface HeaderProps {
   onOpenPurchaseOrder: () => void;
   criticalCount: number;
   totalUnitsToOrder: number;
-  sheetsConnected: boolean;
+  sync: SheetsSyncState;
 }
 
-// Client-side gate only: it keeps operators out of admin screens but is not real
-// security (anything shipped to the browser can be read). Override via VITE_ADMIN_PIN.
-const ADMIN_PIN: string = import.meta.env.VITE_ADMIN_PIN || '1458';
+// Only used before Google Sheets is configured on this device (first setup).
+// Once configured, the PIN is verified by the Apps Script (ADMIN_PIN property) and
+// admin writes are rejected there without it, so this value stops mattering.
+const SETUP_PIN: string = import.meta.env.VITE_ADMIN_PIN || '1458';
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
@@ -50,30 +53,51 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPurchaseOrder,
   criticalCount,
   totalUnitsToOrder,
-  sheetsConnected,
+  sync,
 }) => {
   const isOperator = userRole === 'operator';
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  const checkPin = (code: string) => {
-    if (code === ADMIN_PIN) {
-      setUserRole('admin');
-      setActiveTab('dashboard');
-      setIsPinModalOpen(false);
-      setPinInput('');
-      setPinError(false);
-      return true;
+  const [pinChecking, setPinChecking] = useState(false);
+  const [pinErrorText, setPinErrorText] = useState('PIN incorrecto. Intenta nuevamente.');
+
+  const unlock = (code: string) => {
+    setSessionAdminPin(code);
+    setUserRole('admin');
+    setActiveTab('dashboard');
+    setIsPinModalOpen(false);
+    setPinInput('');
+    setPinError(false);
+  };
+
+  const checkPin = async (code: string) => {
+    if (pinChecking) return;
+    if (!isSheetsConfigured()) {
+      if (code === SETUP_PIN) unlock(code);
+      else {
+        setPinErrorText('PIN incorrecto. Intenta nuevamente.');
+        setPinError(true);
+      }
+      return;
     }
-    return false;
+    setPinChecking(true);
+    const result = await callSheets('VERIFY_PIN', { adminPin: code });
+    setPinChecking(false);
+    if (result.success) {
+      unlock(code);
+    } else {
+      const rejected = result.details?.error === 'PIN incorrecto.';
+      setPinErrorText(rejected ? 'PIN incorrecto. Intenta nuevamente.' : `No se pudo verificar el PIN: ${result.message}`);
+      setPinError(true);
+      setPinInput('');
+    }
   };
 
   const handleAdminUnlock = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkPin(pinInput)) {
-      setPinError(true);
-    }
+    void checkPin(pinInput);
   };
 
   const handleKeypadPress = (digit: string) => {
@@ -81,11 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (pinInput.length < 4) {
       const nextPin = pinInput + digit;
       setPinInput(nextPin);
-      if (nextPin.length === 4) {
-        if (!checkPin(nextPin)) {
-          setPinError(true);
-        }
-      }
+      if (nextPin.length === 4) void checkPin(nextPin);
     }
   };
 
@@ -146,14 +166,24 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Sheets connection status badge */}
             <div 
               className={`hidden sm:flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border ${
-                sheetsConnected 
+                sync.status === 'synced' || sync.status === 'idle'
                   ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300' 
+                  : sync.status === 'error'
+                  ? 'bg-rose-950/60 border-rose-800/60 text-rose-300'
                   : 'bg-amber-950/60 border-amber-800/60 text-amber-300'
               }`}
-              title={sheetsConnected ? 'Google Sheets Conectado' : 'Sin sincronizar'}
+              title={sync.error || (sync.configured ? 'Google Sheets' : 'Google Sheets no configurado en este dispositivo')}
             >
               <Wifi className="w-3 h-3" />
-              <span>{sheetsConnected ? 'Sheets Activo' : 'Offline'}</span>
+              <span>
+                {!sync.configured
+                  ? 'Sin Sheets'
+                  : sync.status === 'error'
+                  ? 'Error Sheets'
+                  : sync.pendingCount > 0
+                  ? `${sync.pendingCount} pendientes`
+                  : 'Sheets al día'}
+              </span>
             </div>
 
             {/* IF OPERATOR: Button to access Admin protected with PIN */}
@@ -176,6 +206,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* Switch to Operator Tablet Mode button */}
                 <button
                   onClick={() => {
+                    setSessionAdminPin('');
                     setUserRole('operator');
                     setActiveTab('entry');
                   }}
@@ -354,7 +385,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               {pinError && (
                 <p className="text-sm text-rose-600 mt-2 font-bold text-center">
-                  PIN incorrecto. Intenta nuevamente.
+                  {pinErrorText}
                 </p>
               )}
             </div>
@@ -373,7 +404,7 @@ export const Header: React.FC<HeaderProps> = ({
                     setPinInput(val);
                     setPinError(false);
                     if (val.length === 4) {
-                      if (!checkPin(val)) setPinError(true);
+                      void checkPin(val);
                     }
                   }}
                   placeholder="••••"
@@ -419,7 +450,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                <span className="text-xs text-slate-500 font-medium">Ingresa el PIN de 4 dígitos</span>
+                <span className="text-xs text-slate-500 font-medium">{pinChecking ? 'Verificando...' : 'Ingresa el PIN de 4 dígitos'}</span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"

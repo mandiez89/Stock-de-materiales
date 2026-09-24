@@ -41,7 +41,32 @@ GitHub por defecto almacena el código fuente, no ejecuta aplicaciones web direc
 ---
 
 ## 📱 Accesos y Roles
-- **Portal Operador (Tablet)**: Permite registrar el stock mensual por bultos o por unidades directas. La interfaz está bloqueada para evitar modificaciones en compras o fórmulas.
-  - URL directa: `tu-enlace/#operador`
-- **Portal Administrador**: Muestra el tablero de control, estado crítico, cálculo de reposición en unidades y ajustes de factores estacionales.
-  - PIN por defecto: `1458` (configurable con la variable `VITE_ADMIN_PIN` al compilar). Es una barrera de uso, no seguridad real: el PIN viaja en el código del navegador.
+- **Portal Operador (Tablet)**: registra el stock por bultos o unidades. No puede modificar compras ni parámetros.
+- **Portal Administrador**: tablero, estado crítico, reposición y mínimos/máximos mensuales. Requiere PIN.
+
+## 🔗 Conexión con Google Sheets (obligatoria para compartir datos entre tablets)
+1. En la app: **Acceso Admin** > pestaña **Google Sheets** > **Copiar Código Apps Script** (es el archivo `apps-script/Code.gs`).
+2. En tu Google Sheet: **Extensiones > Apps Script**, pega el código y guarda.
+3. **Configuración del proyecto > Propiedades del script**, agrega:
+   - `ACCESS_TOKEN`: una clave larga y aleatoria.
+   - `ADMIN_PIN`: el PIN de administrador.
+4. **Implementar > Nueva implementación > Aplicación web** (Ejecutar como: Yo, Acceso: Cualquier usuario). Copia la URL `/exec`.
+5. En **cada tablet**: pestaña Google Sheets > pega URL y token > **Guardar y probar conexión**.
+6. La primera vez, desde una tablet con los datos correctos, pulsa **Enviar stock ahora** para cargar la planilla completa.
+
+Cómo funciona:
+- Cada cambio se envía a la planilla a los ~1,2 s. Si no hay conexión queda pendiente y se reenvía al volver.
+- Cada tablet descarga la planilla al abrir, cada minuto y al volver a la pantalla. Por ítem gana la carga más reciente; un ítem con cambios sin enviar no se pisa.
+- El Apps Script rechaza todo pedido sin `ACCESS_TOKEN`, y los cambios de mínimos/máximos sin `ADMIN_PIN`.
+
+### Seguridad: qué protege y qué no
+- La URL del script ya no está en el código. Sin el token no se puede leer ni escribir la planilla.
+- Con la planilla configurada, el PIN de admin lo valida el Apps Script. El PIN embebido (`VITE_ADMIN_PIN`, por defecto `1458`) solo sirve para la configuración inicial, antes de conectar la tablet.
+- El token queda guardado en cada tablet: quien tenga acceso físico a una tablet configurada puede cargar stock (es el uso esperado), pero no cambiar mínimos/máximos sin el PIN.
+- La marca "más reciente" usa el reloj de cada tablet: mantenelas con fecha y hora automáticas.
+
+## 🧪 Tests
+```bash
+npm test
+```
+Incluye la lógica de stock, la sincronización y el Apps Script (ejecutado contra una planilla simulada).

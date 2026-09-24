@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   MONTHLY_FACTORS, 
   RAW_MATERIALS_FROM_SHEET, 
@@ -13,7 +13,17 @@ import { CurrentStockView } from './components/CurrentStockView';
 import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView';
 import { SheetsIntegrationView } from './components/SheetsIntegrationView';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
-import { syncWithGoogleSheets } from './services/sheetsSync';
+import { callSheets } from './services/sheetsSync';
+import { mergeMinMaxEdits, mergeSavedItems, normalizeRawItem } from './state/stockState';
+import {
+  loadDirtyIds,
+  loadMinMaxDirty,
+  saveDirtyIds,
+  saveMinMaxDirty,
+  useSheetsSync,
+} from './state/useSheetsSync';
+
+const ITEMS_KEY = 'sugestion_raw_items_v3';
 
 export default function App() {
   // By default, the app ALWAYS opens in Tablet Mode (operator).
@@ -39,43 +49,49 @@ export default function App() {
     return monthlyFactors[currentMonthIndex] || monthlyFactors[0];
   }, [monthlyFactors, currentMonthIndex]);
 
-  // Raw items state (includes per-month min/max matrix for all 52 products)
-  // Saved items are merged by id, so adding/removing a product in the catalog
-  // no longer discards every stored count.
+  // Raw items state (includes per-month min/max matrix for all products).
+  // This is the single source of truth: every view reads it and every edit goes through updateItem.
   const [rawItems, setRawItems] = useState<MaterialItem[]>(() => {
     const catalog = RAW_MATERIALS_FROM_SHEET as unknown as MaterialItem[];
     try {
-      const parsed = JSON.parse(localStorage.getItem('sugestion_raw_items_v3') || 'null');
-      if (Array.isArray(parsed)) {
-        const savedById = new Map<string, MaterialItem>(parsed.map((i: MaterialItem) => [i.id, i]));
-        return catalog.map((item) => {
-          const saved = savedById.get(item.id);
-          return saved ? { ...item, ...saved } : item;
-        });
-      }
+      return mergeSavedItems(catalog, JSON.parse(localStorage.getItem(ITEMS_KEY) || 'null'));
     } catch {
-      // ignore corrupt storage
+      return catalog;
     }
-    return catalog;
   });
 
-  // Auto-save raw items to localStorage
-  useEffect(() => {
-    localStorage.setItem('sugestion_raw_items_v3', JSON.stringify(rawItems));
-  }, [rawItems]);
+  // Items edited on this device and not yet confirmed by Google Sheets
+  const [dirtyIds, setDirtyIds] = useState<Set<string>>(loadDirtyIds);
+  const [minMaxDirty, setMinMaxDirty] = useState<boolean>(loadMinMaxDirty);
 
-  // Sheets connection status flag
-  const [sheetsConnected, setSheetsConnected] = useState<boolean>(true);
+  useEffect(() => {
+    try {
+      localStorage.setItem(ITEMS_KEY, JSON.stringify(rawItems));
+    } catch {
+      // storage full or unavailable
+    }
+  }, [rawItems]);
+  useEffect(() => saveDirtyIds(dirtyIds), [dirtyIds]);
+  useEffect(() => saveMinMaxDirty(minMaxDirty), [minMaxDirty]);
 
   // Modals
   const [isPurchaseOrderOpen, setIsPurchaseOrderOpen] = useState(false);
 
-  // Dynamically compute adjusted items based on month factor AND per-product monthly min/max
+  // Dynamically compute adjusted items based on per-product monthly min/max
   const computedItems: MaterialItem[] = useMemo(() => {
     return rawItems.map((raw) => 
       computeMaterialCalculations(raw, selectedMonth.factor, selectedMonth.month)
     );
   }, [rawItems, selectedMonth.factor, selectedMonth.month]);
+
+  const sync = useSheetsSync({
+    setRawItems,
+    computedItems,
+    dirtyIds,
+    setDirtyIds,
+    minMaxDirty,
+    monthName: selectedMonth.name,
+  });
 
   // Derived counts
   const criticalCount = useMemo(
@@ -91,130 +107,60 @@ export default function App() {
     [computedItems]
   );
 
-  // Handlers
-  const handleUpdateBultos = (id: string, newBultos: number) => {
-    setRawItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          // newBultos is the item total; with several batches apply only the difference to the first one
-          let updatedBatches = item.batches;
-          if (updatedBatches && updatedBatches.length > 0) {
-            const currentTotal = updatedBatches.reduce((acc, b) => acc + (b.bultos || 0), 0);
-            const first = updatedBatches[0];
-            updatedBatches = [
-              { ...first, bultos: Math.max(0, (first.bultos || 0) + newBultos - currentTotal) },
-              ...updatedBatches.slice(1),
-            ];
-          }
-          const totalUnits = updatedBatches && updatedBatches.length > 0
-            ? updatedBatches.reduce((acc, b) => acc + ((b.bultos || 0) * (b.unitsPerBulto || 0)), 0)
-            : newBultos * item.unitsPerBulto;
-          // Material arrived: clear the "ordered" flag, same as the tablet does
-          const arrived =
-            item.isOrdered && item.orderedStockSnapshot !== undefined && totalUnits > item.orderedStockSnapshot;
-          return {
-            ...item,
-            bultos: updatedBatches && updatedBatches.length > 0
-              ? updatedBatches.reduce((acc, b) => acc + (b.bultos || 0), 0)
-              : newBultos,
-            batches: updatedBatches,
-            totalUnits,
-            isDirectUnits: false,
-            ...(arrived && { isOrdered: false, orderedAt: undefined, orderedStockSnapshot: undefined }),
-          };
-        }
-        return item;
-      })
-    );
-  };
+  // Single entry point for stock edits: recomputes derived fields, stamps the time
+  // and queues the item for Google Sheets.
+  const updateItem = useCallback(
+    (id: string, change: (item: MaterialItem) => MaterialItem) => {
+      setRawItems((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...normalizeRawItem(change(item), selectedMonth.month), lastUpdated: new Date().toISOString() }
+            : item
+        )
+      );
+      setDirtyIds((prev) => new Set(prev).add(id));
+    },
+    [selectedMonth.month]
+  );
 
-  const handleToggleOrdered = (id: string, isOrdered: boolean) => {
-    setRawItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          return {
-            ...item,
-            isOrdered,
-            orderedAt: isOrdered ? new Date().toISOString() : undefined,
-            orderedStockSnapshot: isOrdered ? item.totalUnits : undefined,
-          };
-        }
-        return item;
-      })
-    );
-  };
-
-  const handleSaveBatch = (
-    updatedItems: MaterialItem[],
-    _responsible: string,
-    _date: string,
-    _notes: string
-  ) => {
-    setRawItems((prev) =>
-      prev.map((oldItem) => {
-        const found = updatedItems.find((u) => u.id === oldItem.id);
-        if (found) {
-          return {
-            ...oldItem,
-            bultos: found.bultos,
-            unitsPerBulto: found.unitsPerBulto,
-            totalUnits: found.totalUnits,
-            batches: found.batches,
-            isDirectUnits: found.isDirectUnits,
-            allowDirectTotal: found.allowDirectTotal,
-            isOrdered: found.isOrdered,
-            orderedAt: found.orderedAt,
-            orderedStockSnapshot: found.orderedStockSnapshot,
-            supplierLeadTimeDays: found.supplierLeadTimeDays ?? oldItem.supplierLeadTimeDays,
-          };
-        }
-        return oldItem;
-      })
-    );
-  };
-
-  // Sync to Google Sheets via direct webhook / proxy
-  const handleSyncWithSheets = async (
-    itemsToSync: MaterialItem[],
-    meta: { responsible: string; date: string; month: string }
-  ): Promise<boolean> => {
-    try {
-      const webhookUrl = localStorage.getItem('sugestion_webhook_url') || '';
-      const result = await syncWithGoogleSheets(webhookUrl, {
-        action: 'UPDATE_STOCK',
-        metadata: meta,
-        items: itemsToSync,
-      });
-
-      if (result.success) {
-        setSheetsConnected(true);
-        return true;
+  // Dashboard +/- : newBultos is the item total; with several batches apply only the difference to the first one
+  const handleUpdateBultos = (id: string, newBultos: number) =>
+    updateItem(id, (item) => {
+      const batches = item.batches && item.batches.length > 0 ? item.batches : undefined;
+      if (!batches) {
+        return { ...item, bultos: newBultos, totalUnits: newBultos * item.unitsPerBulto, isDirectUnits: false, allowDirectTotal: false };
       }
-      return false;
-    } catch (e) {
-      console.error('Error syncing to sheets:', e);
-      return false;
-    }
-  };
+      const currentTotal = batches.reduce((acc, b) => acc + (b.bultos || 0), 0);
+      const first = batches[0];
+      return {
+        ...item,
+        batches: [{ ...first, bultos: Math.max(0, (first.bultos || 0) + newBultos - currentTotal) }, ...batches.slice(1)],
+        isDirectUnits: false,
+        allowDirectTotal: false,
+      };
+    });
 
-  // Sync Min/Max parameters matrix to Google Sheets
-  const handleSyncMinMaxToSheets = async (updatedItems: MaterialItem[]): Promise<boolean> => {
-    try {
-      const webhookUrl = localStorage.getItem('sugestion_webhook_url') || '';
-      const result = await syncWithGoogleSheets(webhookUrl, {
-        action: 'UPDATE_MIN_MAX',
-        minMaxMatrix: updatedItems,
-      });
-      return !!result.success;
-    } catch (e) {
-      console.error('Error syncing min/max to sheets:', e);
-      return false;
-    }
-  };
+  const handleToggleOrdered = (id: string, isOrdered: boolean) =>
+    updateItem(id, (item) => ({
+      ...item,
+      isOrdered,
+      orderedAt: isOrdered ? new Date().toISOString() : undefined,
+      orderedStockSnapshot: isOrdered ? item.totalUnits : undefined,
+    }));
 
-  // Update items min/max matrix from ProductMonthlyMinMaxView
+  // Min/max edits only touch configuration, never stock counts
   const handleUpdateItemsMinMax = (updatedItems: MaterialItem[]) => {
-    setRawItems(updatedItems);
+    setRawItems((prev) => mergeMinMaxEdits(prev, updatedItems));
+    setMinMaxDirty(true);
+  };
+
+  const handleSyncMinMaxToSheets = async (updatedItems: MaterialItem[]): Promise<boolean> => {
+    const merged = mergeMinMaxEdits(rawItems, updatedItems);
+    setRawItems((prev) => mergeMinMaxEdits(prev, updatedItems));
+    setMinMaxDirty(true);
+    const result = await callSheets('UPDATE_MIN_MAX', { minMaxMatrix: merged });
+    if (result.success) setMinMaxDirty(false);
+    return result.success;
   };
 
   const handleExportCSV = () => {
@@ -248,7 +194,7 @@ export default function App() {
         onOpenPurchaseOrder={() => setIsPurchaseOrderOpen(true)}
         criticalCount={criticalCount}
         totalUnitsToOrder={totalUnitsToOrder}
-        sheetsConnected={sheetsConnected}
+        sync={sync}
       />
 
       {/* Main Content Area */}
@@ -269,8 +215,8 @@ export default function App() {
           <TabletStockEntry
             items={computedItems}
             selectedMonth={selectedMonth}
-            onSaveBatch={handleSaveBatch}
-            onSyncWithSheets={handleSyncWithSheets}
+            onUpdateItem={updateItem}
+            sync={sync}
           />
         )}
 
@@ -298,7 +244,7 @@ export default function App() {
           <SheetsIntegrationView
             items={computedItems}
             selectedMonth={selectedMonth}
-            onSyncSuccess={() => setSheetsConnected(true)}
+            sync={sync}
           />
         )}
       </main>

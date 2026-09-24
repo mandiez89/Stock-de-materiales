@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Tablet, 
   SendHorizontal, 
@@ -20,13 +20,13 @@ import {
 } from 'lucide-react';
 import { MaterialItem, MaterialCategory, MonthlyFactor, BultoBatch } from '../types';
 import confetti from 'canvas-confetti';
-import { computeStockStatus } from '../data/initialData';
+import { SheetsSyncState } from '../state/useSheetsSync';
 
 interface TabletStockEntryProps {
   items: MaterialItem[];
   selectedMonth: MonthlyFactor;
-  onSaveBatch: (updatedItems: MaterialItem[], responsible: string, date: string, notes: string) => void;
-  onSyncWithSheets: (itemsToSync: MaterialItem[], meta: { responsible: string; date: string; month: string }) => Promise<boolean>;
+  onUpdateItem: (id: string, change: (item: MaterialItem) => MaterialItem) => void;
+  sync: SheetsSyncState;
 }
 
 // Category visual badges and styling for instant recognition
@@ -86,335 +86,72 @@ function normalizeBatches(item: MaterialItem): BultoBatch[] {
 export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   items,
   selectedMonth,
-  onSaveBatch,
-  onSyncWithSheets,
+  onUpdateItem,
+  sync,
 }) => {
-  // Local form items, initialized from the app state (already persisted by App).
-  // A separate tablet draft used to overwrite edits made from the dashboard.
-  const [formItems, setFormItems] = useState<MaterialItem[]>(() =>
-    items.map((item) => ({
-      ...item,
-      batches: normalizeBatches(item),
-    }))
-  );
-
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  
-  // Real-time Immediate Sync State
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
-    const saved = localStorage.getItem('sugestion_autosync_sheets');
-    return saved !== null ? saved === 'true' : true;
-  });
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'pending' | 'syncing' | 'synced' | 'error'>('idle');
-  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(() => {
-    return localStorage.getItem('sugestion_last_sheets_sync_time') || null;
-  });
-  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
-  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
 
-  // Sync to parent real-time without re-render loop
-  const onSaveBatchRef = useRef(onSaveBatch);
-  onSaveBatchRef.current = onSaveBatch;
-
-  const onSyncWithSheetsRef = useRef(onSyncWithSheets);
-  onSyncWithSheetsRef.current = onSyncWithSheets;
-
-  const syncDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isSyncInFlightRef = useRef<boolean>(false);
-  const pendingSyncItemsRef = useRef<MaterialItem[] | null>(null);
-  const isFirstRender = useRef<boolean>(true);
-
-  // Save autoSync setting
-  useEffect(() => {
-    localStorage.setItem('sugestion_autosync_sheets', String(autoSyncEnabled));
-  }, [autoSyncEnabled]);
-
-  // Recalculate status and units to order (same rules as the dashboard)
-  const computeItemStatus = (item: MaterialItem, totalUnits: number) =>
-    computeStockStatus(totalUnits, item.minStockAdjusted, item.maxStockAdjusted, item.supplierLeadTimeDays);
-
-  // Helper to recompute totals from batches
-  const recalculateItemBatches = (item: MaterialItem, updatedBatches: BultoBatch[]): MaterialItem => {
-    const totalBultos = updatedBatches.reduce((acc, b) => acc + (b.bultos || 0), 0);
-    const calculatedUnits = updatedBatches.reduce((acc, b) => acc + ((b.bultos || 0) * (b.unitsPerBulto || 0)), 0);
-    const totalUnits = item.allowDirectTotal ? item.totalUnits : calculatedUnits;
-    
-    const { status, unitsToOrder } = computeItemStatus(item, totalUnits);
-    const primaryUnitsPerBulto = updatedBatches[0]?.unitsPerBulto || item.unitsPerBulto;
-    const bultosToOrder = unitsToOrder > 0 && primaryUnitsPerBulto > 0
-      ? Math.ceil(unitsToOrder / primaryUnitsPerBulto)
-      : 0;
-
-    // Check if order was delivered (stock increased past snapshot)
-    let isOrdered = item.isOrdered;
-    let orderedAt = item.orderedAt;
-    let orderedStockSnapshot = item.orderedStockSnapshot;
-    if (isOrdered && orderedStockSnapshot !== undefined && totalUnits > orderedStockSnapshot) {
-      isOrdered = false;
-      orderedAt = undefined;
-      orderedStockSnapshot = undefined;
-    }
-
-    return {
-      ...item,
-      batches: updatedBatches,
-      bultos: totalBultos,
-      unitsPerBulto: primaryUnitsPerBulto,
-      totalUnits,
-      status,
-      unitsToOrder,
-      bultosToOrder,
-      isOrdered,
-      orderedAt,
-      orderedStockSnapshot,
-      lastUpdated: new Date().toISOString(),
-    };
+  // Edits go straight to the app state; status and totals are recomputed there
+  const updateBatches = (itemId: string, change: (batches: BultoBatch[]) => BultoBatch[]) => {
+    onUpdateItem(itemId, (item) => {
+      const batches = change(normalizeBatches(item));
+      return { ...item, batches, unitsPerBulto: batches[0]?.unitsPerBulto || item.unitsPerBulto };
+    });
   };
 
-  // Immediate Sync Execution Function
-  const executeSync = async (itemsToSync: MaterialItem[]) => {
-    if (isSyncInFlightRef.current) {
-      pendingSyncItemsRef.current = itemsToSync;
-      return;
-    }
-
-    isSyncInFlightRef.current = true;
-    setSyncStatus('syncing');
-    setSyncErrorMessage(null);
-
-    try {
-      const success = await onSyncWithSheetsRef.current(itemsToSync, {
-        responsible: 'Operador Depósito (Tablet)',
-        date: new Date().toISOString().split('T')[0],
-        month: selectedMonth.name,
-      });
-
-      if (success) {
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setLastSyncedTime(timeStr);
-        localStorage.setItem('sugestion_last_sheets_sync_time', timeStr);
-        setSyncStatus('synced');
-      } else {
-        setSyncStatus('error');
-        setSyncErrorMessage('No se pudo actualizar en Google Sheets. Revisa la URL del Webhook.');
-      }
-    } catch (err: any) {
-      setSyncStatus('error');
-      setSyncErrorMessage(err?.message || 'Error de conexión');
-    } finally {
-      isSyncInFlightRef.current = false;
-      // If items changed while sync was running, run again immediately with latest data
-      if (pendingSyncItemsRef.current) {
-        const nextItems = pendingSyncItemsRef.current;
-        pendingSyncItemsRef.current = null;
-        executeSync(nextItems);
-      }
-    }
-  };
-
-  // Auto-save to localStorage, parent state, and trigger IMMEDIATE debounced Sheets sync
-  useEffect(() => {
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setLastSavedTime(nowTime);
-
-    onSaveBatchRef.current(
-      formItems, 
-      'Operador en Planta', 
-      new Date().toISOString().split('T')[0], 
-      'Actualización en tiempo real por bultos'
-    );
-
-    // Skip immediate sync on initial mount
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-
-    if (autoSyncEnabled) {
-      setSyncStatus('pending');
-      if (syncDebounceTimerRef.current) {
-        clearTimeout(syncDebounceTimerRef.current);
-      }
-      // 1.2s debounce for fast, immediate cloud sync without lagging the operator
-      syncDebounceTimerRef.current = setTimeout(() => {
-        executeSync(formItems);
-      }, 1200);
-    }
-
-    return () => {
-      if (syncDebounceTimerRef.current) {
-        clearTimeout(syncDebounceTimerRef.current);
-      }
-    };
-  }, [formItems, autoSyncEnabled]);
+  const setBatchField = (itemId: string, batchId: string, patch: (b: BultoBatch) => Partial<BultoBatch>) =>
+    updateBatches(itemId, (batches) => batches.map((b) => (b.id === batchId ? { ...b, ...patch(b) } : b)));
 
   // Step bultos for a specific batch (Abrir o sumar bultos)
-  const handleStepBatchBultos = (itemId: string, batchId: string, delta: number) => {
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const currentBatches = normalizeBatches(item);
-          const updatedBatches = currentBatches.map((b) => {
-            if (b.id === batchId) {
-              return {
-                ...b,
-                bultos: Math.max(0, (b.bultos || 0) + delta),
-              };
-            }
-            return b;
-          });
-          return recalculateItemBatches(item, updatedBatches);
-        }
-        return item;
-      })
-    );
-  };
+  const handleStepBatchBultos = (itemId: string, batchId: string, delta: number) =>
+    setBatchField(itemId, batchId, (b) => ({ bultos: Math.max(0, (b.bultos || 0) + delta) }));
 
   // Set explicit bultos count for a specific batch
-  const handleSetBatchBultos = (itemId: string, batchId: string, value: number) => {
-    const val = Math.max(0, isNaN(value) ? 0 : Math.floor(value));
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const currentBatches = normalizeBatches(item);
-          const updatedBatches = currentBatches.map((b) => {
-            if (b.id === batchId) {
-              return { ...b, bultos: val };
-            }
-            return b;
-          });
-          return recalculateItemBatches(item, updatedBatches);
-        }
-        return item;
-      })
-    );
-  };
+  const handleSetBatchBultos = (itemId: string, batchId: string, value: number) =>
+    setBatchField(itemId, batchId, () => ({ bultos: Math.max(0, isNaN(value) ? 0 : Math.floor(value)) }));
 
   // Set units per bulto for a specific batch
-  const handleSetBatchUnitsPerBulto = (itemId: string, batchId: string, value: number) => {
-    const val = Math.max(1, isNaN(value) ? 1 : Math.floor(value));
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const currentBatches = normalizeBatches(item);
-          const updatedBatches = currentBatches.map((b) => {
-            if (b.id === batchId) {
-              return { ...b, unitsPerBulto: val };
-            }
-            return b;
-          });
-          return recalculateItemBatches(item, updatedBatches);
-        }
-        return item;
-      })
-    );
-  };
+  const handleSetBatchUnitsPerBulto = (itemId: string, batchId: string, value: number) =>
+    setBatchField(itemId, batchId, () => ({ unitsPerBulto: Math.max(1, isNaN(value) ? 1 : Math.floor(value)) }));
 
   // Add extra batch line (e.g. 15 bultos de 85 unidades)
-  const handleAddBatch = (itemId: string) => {
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const currentBatches = normalizeBatches(item);
-          const newBatch: BultoBatch = {
-            id: `batch-${item.id}-${Date.now()}`,
-            bultos: 0,
-            unitsPerBulto: currentBatches[0]?.unitsPerBulto || item.unitsPerBulto || 100,
-            label: `Partida ${currentBatches.length + 1}`,
-          };
-          const updatedBatches = [...currentBatches, newBatch];
-          return recalculateItemBatches(item, updatedBatches);
-        }
-        return item;
-      })
-    );
-  };
+  const handleAddBatch = (itemId: string) =>
+    updateBatches(itemId, (batches) => [
+      ...batches,
+      {
+        id: `batch-${itemId}-${Date.now()}`,
+        bultos: 0,
+        unitsPerBulto: batches[0]?.unitsPerBulto || 100,
+        label: `Partida ${batches.length + 1}`,
+      },
+    ]);
 
   // Remove a batch line (if more than 1 batch)
-  const handleRemoveBatch = (itemId: string, batchId: string) => {
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const currentBatches = normalizeBatches(item);
-          if (currentBatches.length <= 1) return item;
-          const updatedBatches = currentBatches.filter((b) => b.id !== batchId);
-          return recalculateItemBatches(item, updatedBatches);
-        }
-        return item;
-      })
-    );
-  };
+  const handleRemoveBatch = (itemId: string, batchId: string) =>
+    updateBatches(itemId, (batches) => (batches.length <= 1 ? batches : batches.filter((b) => b.id !== batchId)));
 
-  // Toggle allow direct total entry per item (Manual vs Auto)
-  const handleToggleAllowDirectTotal = (id: string) => {
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const next = !(item.allowDirectTotal ?? false);
-          const currentBatches = normalizeBatches(item);
-          const calculatedUnits = currentBatches.reduce((acc, b) => acc + (b.bultos * b.unitsPerBulto), 0);
-          const totalUnits = next ? item.totalUnits : calculatedUnits;
-          const { status, unitsToOrder } = computeItemStatus(item, totalUnits);
-          const primaryUnits = currentBatches[0]?.unitsPerBulto || item.unitsPerBulto;
-          const bultosToOrder = unitsToOrder > 0 && primaryUnits > 0
-            ? Math.ceil(unitsToOrder / primaryUnits)
-            : 0;
+  // Toggle direct total entry per item (Manual vs Auto)
+  const handleToggleAllowDirectTotal = (id: string) =>
+    onUpdateItem(id, (item) => {
+      const next = !(item.allowDirectTotal ?? false);
+      return { ...item, batches: normalizeBatches(item), allowDirectTotal: next, isDirectUnits: next };
+    });
 
-          return {
-            ...item,
-            allowDirectTotal: next,
-            isDirectUnits: next,
-            totalUnits,
-            unitsToOrder,
-            bultosToOrder,
-            status,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-        return item;
-      })
-    );
-  };
-
-  // Set by Total Units directly (only when allowDirectTotal is enabled)
+  // Set by Total Units directly (only when direct entry is enabled)
   const handleSetTotalUnitsDirect = (id: string, newTotalVal: number) => {
     const totalUnits = Math.max(0, isNaN(newTotalVal) ? 0 : Math.floor(newTotalVal));
-    setFormItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const currentBatches = normalizeBatches(item);
-          const primaryUnits = currentBatches[0]?.unitsPerBulto || item.unitsPerBulto || 1;
-          const approxBultos = Math.floor(totalUnits / primaryUnits);
-          const { status, unitsToOrder } = computeItemStatus(item, totalUnits);
-          const bultosToOrder = unitsToOrder > 0 && primaryUnits > 0
-            ? Math.ceil(unitsToOrder / primaryUnits)
-            : 0;
-
-          return {
-            ...item,
-            bultos: approxBultos,
-            totalUnits,
-            isDirectUnits: true,
-            unitsToOrder,
-            bultosToOrder,
-            status,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-        return item;
-      })
-    );
+    onUpdateItem(id, (item) => ({ ...item, totalUnits, isDirectUnits: true, allowDirectTotal: true }));
   };
 
   // Categories list
   const categoriesList: { id: string; label: string; count: number; icon: string }[] = [
-    { id: 'all', label: 'Todos', count: formItems.length, icon: '📋' },
-    { id: 'Cajas', label: 'Cajas', count: formItems.filter((i) => i.category === 'Cajas').length, icon: '📦' },
-    { id: 'Celofanes', label: 'Celofanes', count: formItems.filter((i) => i.category === 'Celofanes').length, icon: '📄' },
-    { id: 'Bolsitas', label: 'Bolsitas', count: formItems.filter((i) => i.category === 'Bolsitas').length, icon: '🛍️' },
-    { id: 'Caballetes', label: 'Caballetes', count: formItems.filter((i) => i.category === 'Caballetes').length, icon: '🏷️' },
-    { id: 'Cartones', label: 'Cartones', count: formItems.filter((i) => i.category === 'Cartones').length, icon: '📋' },
+    { id: 'all', label: 'Todos', count: items.length, icon: '📋' },
+    { id: 'Cajas', label: 'Cajas', count: items.filter((i) => i.category === 'Cajas').length, icon: '📦' },
+    { id: 'Celofanes', label: 'Celofanes', count: items.filter((i) => i.category === 'Celofanes').length, icon: '📄' },
+    { id: 'Bolsitas', label: 'Bolsitas', count: items.filter((i) => i.category === 'Bolsitas').length, icon: '🛍️' },
+    { id: 'Caballetes', label: 'Caballetes', count: items.filter((i) => i.category === 'Caballetes').length, icon: '🏷️' },
+    { id: 'Cartones', label: 'Cartones', count: items.filter((i) => i.category === 'Cartones').length, icon: '📋' },
   ];
 
   const groupedCategories: MaterialCategory[] = ['Cajas', 'Celofanes', 'Bolsitas', 'Caballetes', 'Cartones'];
@@ -428,20 +165,18 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
 
   // Overall totals
   const totalUnitsCounted = useMemo(() => {
-    return formItems.reduce((acc, item) => acc + (item.totalUnits || 0), 0);
-  }, [formItems]);
+    return items.reduce((acc, item) => acc + (item.totalUnits || 0), 0);
+  }, [items]);
 
   const totalBultosCounted = useMemo(() => {
-    return formItems.reduce((acc, item) => acc + (item.bultos || 0), 0);
-  }, [formItems]);
+    return items.reduce((acc, item) => acc + (item.bultos || 0), 0);
+  }, [items]);
 
-  // Force Manual Immediate Sync
-  const handleForceManualSync = () => {
-    if (syncDebounceTimerRef.current) {
-      clearTimeout(syncDebounceTimerRef.current);
+  // Manual sync: sends everything now and records a history row in the sheet
+  const handleForceManualSync = async () => {
+    if (await sync.syncNow()) {
+      confetti({ particleCount: 35, spread: 50, origin: { y: 0.9 } });
     }
-    executeSync(formItems);
-    confetti({ particleCount: 35, spread: 50, origin: { y: 0.9 } });
   };
 
   return (
@@ -475,30 +210,30 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
             <button
               type="button"
               onClick={handleForceManualSync}
-              disabled={syncStatus === 'syncing'}
+              disabled={sync.status === 'syncing'}
               className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-2xs ${
-                syncStatus === 'syncing'
+                sync.status === 'syncing'
                   ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                  : syncStatus === 'synced'
+                  : sync.status === 'synced'
                   ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : syncStatus === 'error'
+                  : sync.status === 'error'
                   ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300'
                   : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200'
               }`}
               title="Sincronizar de inmediato con Google Sheets"
             >
-              {syncStatus === 'syncing' ? (
+              {sync.status === 'syncing' ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
                   <span className="hidden sm:inline text-[11px]">Guardando...</span>
                 </>
-              ) : syncStatus === 'synced' ? (
+              ) : sync.status === 'synced' ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
                   <span className="text-[11px] hidden sm:inline">Sheets al día</span>
                   <span className="text-[11px] sm:hidden">Al día</span>
                 </>
-              ) : syncStatus === 'error' ? (
+              ) : sync.status === 'error' ? (
                 <>
                   <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                   <span className="text-[11px]">Reintentar</span>
@@ -519,16 +254,18 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           <div className="flex items-center gap-1.5 truncate">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             <span className="font-medium text-slate-600 truncate">
-              {autoSyncEnabled ? (
-                syncStatus === 'syncing' ? (
+              {!sync.configured ? (
+                <span className="text-amber-700 font-bold">Sin conexión a Google Sheets: los datos se guardan solo en esta tablet</span>
+              ) : sync.autoSync ? (
+                sync.status === 'syncing' ? (
                   <span className="text-amber-700 font-bold flex items-center gap-1">
                     <RefreshCw className="w-3 h-3 animate-spin inline" /> Guardando en Google Sheets de inmediato...
                   </span>
-                ) : syncStatus === 'pending' ? (
-                  <span className="text-indigo-600 font-medium">Sincronizando cambios a Sheets...</span>
-                ) : lastSyncedTime ? (
+                ) : sync.status === 'pending' || sync.pendingCount > 0 ? (
+                  <span className="text-indigo-600 font-medium">{sync.pendingCount} cambio(s) pendientes de enviar a Sheets...</span>
+                ) : sync.lastSyncedAt ? (
                   <span>
-                    Guardado en Google Sheets a las <strong className="text-slate-700 font-mono">{lastSyncedTime}</strong>
+                    Guardado en Google Sheets a las <strong className="text-slate-700 font-mono">{sync.lastSyncedAt}</strong>
                   </span>
                 ) : (
                   <span>Sincronización inmediata a Google Sheets activa</span>
@@ -542,8 +279,8 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           <label className="flex items-center gap-1 text-[10px] text-slate-600 font-semibold cursor-pointer shrink-0 select-none">
             <input
               type="checkbox"
-              checked={autoSyncEnabled}
-              onChange={(e) => setAutoSyncEnabled(e.target.checked)}
+              checked={sync.autoSync}
+              onChange={(e) => sync.setAutoSync(e.target.checked)}
               className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
             />
             <span className="hidden sm:inline">Sheets Inmediato</span>
@@ -552,11 +289,11 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
       </div>
 
       {/* Error alert if sync failed */}
-      {syncErrorMessage && (
+      {sync.error && (
         <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs flex items-center justify-between gap-2 animate-fade-in shadow-2xs">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{syncErrorMessage}</span>
+            <span>{sync.error}</span>
           </div>
           <button
             onClick={handleForceManualSync}
@@ -623,7 +360,7 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
       <div className="space-y-4">
         {filteredCategories.map((category) => {
           const categoryStyle = CATEGORY_STYLES[category];
-          const categoryItems = formItems.filter(
+          const categoryItems = items.filter(
             (item) =>
               item.category === category &&
               (searchQuery === '' ||
@@ -902,10 +639,10 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
           <button
             type="button"
             onClick={handleForceManualSync}
-            disabled={syncStatus === 'syncing'}
+            disabled={sync.status === 'syncing'}
             className="h-10 px-4 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
           >
-            {syncStatus === 'syncing' ? (
+            {sync.status === 'syncing' ? (
               <>
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-950" />
                 <span>Sincronizando...</span>

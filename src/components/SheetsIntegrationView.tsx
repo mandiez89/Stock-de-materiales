@@ -21,32 +21,27 @@ import {
 } from 'lucide-react';
 import { GOOGLE_APPS_SCRIPT_TEMPLATE, SHEETS_ARCHITECTURE_OPTIONS, exportInventoryToCSV } from '../data/sheetsIntegration';
 import { MaterialItem, MonthlyFactor } from '../types';
-import { syncWithGoogleSheets, DEFAULT_WEBHOOK_URL } from '../services/sheetsSync';
+import { callSheets, getSheetsConfig, saveSheetsConfig } from '../services/sheetsSync';
+import { SheetsSyncState } from '../state/useSheetsSync';
 import confetti from 'canvas-confetti';
 
 interface SheetsIntegrationViewProps {
   items: MaterialItem[];
   selectedMonth: MonthlyFactor;
-  onSyncSuccess: () => void;
+  sync: SheetsSyncState;
 }
 
 export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
   items,
   selectedMonth,
-  onSyncSuccess,
+  sync,
 }) => {
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedFormulas, setCopiedFormulas] = useState(false);
-  const [webhookUrl, setWebhookUrl] = useState(() => {
-    return localStorage.getItem('sugestion_webhook_url') || DEFAULT_WEBHOOK_URL;
-  });
+  const [webhookUrl, setWebhookUrl] = useState(() => getSheetsConfig().webhookUrl);
+  const [accessToken, setAccessToken] = useState(() => getSheetsConfig().accessToken);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
-
-  // Save webhookUrl to localStorage
-  useEffect(() => {
-    localStorage.setItem('sugestion_webhook_url', webhookUrl);
-  }, [webhookUrl]);
 
   const handleCopyScript = () => {
     navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE);
@@ -66,45 +61,46 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleTestSync = async () => {
+  // Saves the connection on this device, checks it and pulls the shared state
+  const handleSaveAndTest = async () => {
     setSyncing(true);
     setSyncResult(null);
-
-    try {
-      const responsible = localStorage.getItem('sugestion_tablet_responsible') || 'Operador Depósito';
-      const result = await syncWithGoogleSheets(webhookUrl, {
-        action: 'UPDATE_STOCK',
-        metadata: {
-          date: new Date().toLocaleDateString('es-AR'),
-          responsible,
-          month: selectedMonth.name,
-          criticalCount: items.filter((i) => i.status === 'CRITICO').length,
-          totalUnitsToOrder: items.reduce((acc, i) => acc + i.unitsToOrder, 0),
-        },
-        items,
-      });
-
-      if (result.success) {
-        setSyncResult({
-          success: true,
-          message: webhookUrl
-            ? '¡Sincronizado exitosamente con tu Google Sheet en vivo!'
-            : '¡Prueba simulada exitosa! Los materiales han sido formateados para el Webhook.',
-          details: `${items.length} materiales procesados • Mes: ${selectedMonth.name} • Responsable: ${responsible}`,
-        });
-        onSyncSuccess();
-        confetti({ particleCount: 50, spread: 60 });
-      } else {
-        throw new Error(result.message || 'Error en la respuesta del Webhook');
-      }
-    } catch (err: any) {
+    const config = { webhookUrl, accessToken };
+    const result = await callSheets('PING', {}, config);
+    if (result.success) {
+      saveSheetsConfig(config);
+      sync.refreshConfig();
+      await sync.pull();
       setSyncResult({
-        success: false,
-        message: `Fallo al sincronizar: ${err.message}`,
+        success: true,
+        message: 'Conexión verificada y guardada en este dispositivo.',
+        details: 'Los datos de la planilla se descargan automáticamente cada minuto.',
       });
-    } finally {
-      setSyncing(false);
+      confetti({ particleCount: 50, spread: 60 });
+    } else {
+      setSyncResult({ success: false, message: result.message });
     }
+    setSyncing(false);
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    const ok = await sync.syncNow({ responsible: 'Administración' });
+    setSyncResult(
+      ok
+        ? { success: true, message: 'Stock enviado a Google Sheets.', details: `${items.length} materiales • Mes: ${selectedMonth.name}` }
+        : { success: false, message: sync.error || 'No se pudo sincronizar.' }
+    );
+    setSyncing(false);
+  };
+
+  const handleDisconnect = () => {
+    saveSheetsConfig({ webhookUrl: '', accessToken: '' });
+    setWebhookUrl('');
+    setAccessToken('');
+    sync.refreshConfig();
+    setSyncResult(null);
   };
 
   const sheetFormulas = [
@@ -256,7 +252,7 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
             </div>
             <h4 className="font-bold text-slate-800 mb-1">Pega el Código</h4>
             <p className="text-slate-500">
-              Copia el código que te dejamos abajo, pégalo en el editor y haz clic en el ícono de Guardar.
+              Pega el código de abajo y guarda. En <strong>Configuración del proyecto &gt; Propiedades del script</strong> crea <code>ACCESS_TOKEN</code> (clave larga) y <code>ADMIN_PIN</code>.
             </p>
           </div>
 
@@ -304,35 +300,55 @@ export const SheetsIntegrationView: React.FC<SheetsIntegrationViewProps> = ({
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
             <Send className="w-3.5 h-3.5 text-indigo-600" />
-            Probar Sincronización en Vivo con tu Google Sheet
+            Conexión de este dispositivo con Google Sheets
           </h4>
           <p className="text-xs text-slate-500">
-            Pega aquí la URL de la Aplicación Web generada por Google Apps Script, o haz clic en "Probar Sincronización" para simular el envío completo de los 52 materiales.
+            Se guardan solo en este dispositivo (hay que cargarlos una vez en cada tablet). El token es el valor de
+            <code className="mx-1 font-mono">ACCESS_TOKEN</code> en Propiedades del script: sin él, la URL no permite leer ni escribir.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
-              type="text"
-              placeholder="https://script.google.com/macros/s/.../exec (opcional)"
+              type="url"
+              placeholder="https://script.google.com/macros/s/.../exec"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-hidden"
+              className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-hidden"
             />
+            <input
+              type="password"
+              autoComplete="off"
+              placeholder="Token de acceso (ACCESS_TOKEN)"
+              value={accessToken}
+              onChange={(e) => setAccessToken(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-hidden"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={handleTestSync}
-              disabled={syncing}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+              onClick={handleSaveAndTest}
+              disabled={syncing || !webhookUrl || !accessToken}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              {syncing ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sincronizando...
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" /> Sincronizar Stock Ahora
-                </>
-              )}
+              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+              Guardar y probar conexión
             </button>
+            <button
+              onClick={handleSyncNow}
+              disabled={syncing || !sync.configured}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" /> Enviar stock ahora
+            </button>
+            {sync.configured && (
+              <button
+                onClick={handleDisconnect}
+                className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer"
+              >
+                Desconectar este dispositivo
+              </button>
+            )}
           </div>
 
           {syncResult && (
