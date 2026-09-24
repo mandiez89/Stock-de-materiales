@@ -410,6 +410,31 @@ export const RAW_MATERIALS_FROM_SHEET: (Omit<MaterialItem, 'minStockAdjusted' | 
 }));
 
 
+// Status rules shared by every view (dashboard, tablet, stock view)
+export function computeStockStatus(
+  totalUnits: number,
+  minStock: number,
+  maxStock: number,
+  leadDays: number = 0
+): { status: MaterialItem['status']; unitsToOrder: number } {
+  const toMax = Math.max(0, maxStock - totalUnits);
+
+  // Without a configured minimum there is nothing to replenish
+  if (minStock > 0) {
+    if (totalUnits <= minStock * 0.5) return { status: 'CRITICO', unitsToOrder: toMax };
+    if (totalUnits < minStock) return { status: 'PEDIR', unitsToOrder: toMax };
+
+    // Alerta de pedido anticipado para llegar a tiempo antes del stock mínimo
+    const leadBuffer = Math.round((minStock / 30) * (leadDays || 0));
+    if (leadDays > 0 && totalUnits <= minStock + leadBuffer) {
+      return { status: 'PEDIR', unitsToOrder: toMax };
+    }
+  }
+
+  if (maxStock > 0 && totalUnits > maxStock * 1.25) return { status: 'SOBRESTOCK', unitsToOrder: 0 };
+  return { status: 'OPTIMO', unitsToOrder: 0 };
+}
+
 // Calculation helper taking into account month number and explicit per-product monthly thresholds
 export function computeMaterialCalculations(
   rawItem: Omit<MaterialItem, 'minStockAdjusted' | 'maxStockAdjusted' | 'unitsToOrder' | 'bultosToOrder' | 'status'>,
@@ -444,32 +469,12 @@ export function computeMaterialCalculations(
     maxStockAdjusted = rawItem.maxStockBase;
   }
 
-  let status: MaterialItem['status'] = 'OPTIMO';
-  let unitsToOrder = 0;
-
-  // Calculate lead time threshold (Anticipation buffer based on supplier lead days)
-  const leadDays = rawItem.supplierLeadTimeDays || 0;
-  const dailyConsumption = minStockAdjusted > 0 ? minStockAdjusted / 30 : 0;
-  const leadBuffer = Math.round(dailyConsumption * leadDays);
-  const reorderThresholdWithLead = minStockAdjusted + leadBuffer;
-
-  if (totalUnits <= minStockAdjusted * 0.5) {
-    status = 'CRITICO';
-    unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
-  } else if (totalUnits < minStockAdjusted) {
-    status = 'PEDIR';
-    unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
-  } else if (leadDays > 0 && totalUnits <= reorderThresholdWithLead) {
-    // Alerta de pedido anticipado para llegar a tiempo antes del stock mínimo
-    status = 'PEDIR';
-    unitsToOrder = Math.max(0, maxStockAdjusted - totalUnits);
-  } else if (totalUnits > maxStockAdjusted * 1.25) {
-    status = 'SOBRESTOCK';
-    unitsToOrder = 0;
-  } else {
-    status = 'OPTIMO';
-    unitsToOrder = 0;
-  }
+  const { status, unitsToOrder } = computeStockStatus(
+    totalUnits,
+    minStockAdjusted,
+    maxStockAdjusted,
+    rawItem.supplierLeadTimeDays
+  );
 
   // Calculate bultos rounded up (providers supply closed bundles)
   const primaryUnitsPerBulto = rawItem.batches && rawItem.batches.length > 0

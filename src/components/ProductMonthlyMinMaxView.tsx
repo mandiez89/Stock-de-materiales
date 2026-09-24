@@ -43,16 +43,20 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
   // Local copy of items for in-place editing
   const [localItems, setLocalItems] = useState<MaterialItem[]>(items);
 
+  // Unsaved edits must survive background updates (e.g. periodic pull from Google Sheets)
+  const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
+
   // Sync if parent items update
   React.useEffect(() => {
-    setLocalItems(items);
-  }, [items]);
+    if (!hasUnsavedEdits) setLocalItems(items);
+  }, [items, hasUnsavedEdits]);
 
   const categories: MaterialCategory[] = ['Cajas', 'Celofanes', 'Bolsitas', 'Caballetes', 'Cartones'];
 
   // Handle in-place editing of min or max for a specific item and month
   const handleThresholdChange = (itemId: string, month: number, field: 'min' | 'max', value: number) => {
     const val = Math.max(0, isNaN(value) ? 0 : value);
+    setHasUnsavedEdits(true);
     setLocalItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
@@ -79,6 +83,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
   // Handle in-place editing of supplier lead time days
   const handleLeadTimeChange = (itemId: string, days: number) => {
     const val = Math.max(1, isNaN(days) ? 1 : Math.floor(days));
+    setHasUnsavedEdits(true);
     setLocalItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
@@ -95,6 +100,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
   // Save changes to state
   const handleSaveToApp = () => {
     onUpdateItemsMinMax(localItems);
+    setHasUnsavedEdits(false);
     setFeedbackMessage({
       type: 'success',
       text: '¡Parámetros de stock mínimo y máximo actualizados en la aplicación!',
@@ -110,6 +116,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
     setFeedbackMessage(null);
     try {
       const success = await onSyncMinMaxToSheets(localItems);
+      setHasUnsavedEdits(false);
       if (success) {
         setFeedbackMessage({
           type: 'success',
@@ -119,7 +126,7 @@ export const ProductMonthlyMinMaxView: React.FC<ProductMonthlyMinMaxViewProps> =
       } else {
         setFeedbackMessage({
           type: 'error',
-          text: 'No se pudo sincronizar con Google Sheets. Revisa la URL del Webhook.',
+          text: 'Guardado en la app, pero no en Google Sheets. Revisa la conexión y que hayas ingresado con el PIN correcto.',
         });
       }
     } catch (e: any) {
