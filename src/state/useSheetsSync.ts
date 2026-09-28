@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
-import { MaterialItem } from '../types';
+import { MaterialItem, StockMovement } from '../types';
 import { callSheets, getSheetsConfig, isSheetsConfigured } from '../services/sheetsSync';
 import { applyRemoteMinMax, applyRemoteStock, RemoteMinMax, RemoteStockItem } from './stockState';
 
@@ -59,8 +59,9 @@ export function useSheetsSync(params: {
   setDirtyIds: Dispatch<SetStateAction<Set<string>>>;
   minMaxDirty: boolean;
   monthName: string;
+  setMovements?: Dispatch<SetStateAction<StockMovement[]>>;
 }): SheetsSyncState {
-  const { setRawItems, computedItems, dirtyIds, setDirtyIds, minMaxDirty, monthName } = params;
+  const { setRawItems, computedItems, dirtyIds, setDirtyIds, minMaxDirty, monthName, setMovements } = params;
 
   const [configured, setConfigured] = useState(() => isSheetsConfigured());
   const [autoSync, setAutoSyncState] = useState<boolean>(() => load(AUTOSYNC_KEY, true));
@@ -186,6 +187,16 @@ export function useSheetsSync(params: {
             }
           });
           remoteItems = Array.from(map.values());
+        }
+        if (setMovements && Array.isArray(sData.movements) && sData.movements.length > 0) {
+          setMovements((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const toAdd = sData.movements.filter((m: any) => m && m.id && !existingIds.has(m.id));
+            if (toAdd.length === 0) return prev;
+            return [...toAdd, ...prev].sort(
+              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+          });
         }
       }
     } catch {

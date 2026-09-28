@@ -5,16 +5,22 @@ import {
   computeMaterialCalculations 
 } from './data/initialData';
 import { exportInventoryToCSV } from './data/sheetsIntegration';
-import { MaterialItem, MonthlyFactor, UserRole } from './types';
+import { MaterialItem, MonthlyFactor, UserRole, StockMovement } from './types';
 import { Header, AppTab } from './components/Header';
 import { StockDashboard } from './components/StockDashboard';
 import { TabletStockEntry } from './components/TabletStockEntry';
 import { CurrentStockView } from './components/CurrentStockView';
+import { MovementsHistoryView } from './components/MovementsHistoryView';
 import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView';
 import { CloudSyncSettingsModal } from './components/CloudSyncSettingsModal';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
 import { callSheets, getSheetsConfig, isSheetsConfigured } from './services/sheetsSync';
-import { mergeMinMaxEdits, mergeSavedItems, normalizeRawItem } from './state/stockState';
+import { applyRemoteStock, mergeMinMaxEdits, mergeSavedItems, normalizeRawItem } from './state/stockState';
+import {
+  INITIAL_STOCK_MOVEMENTS,
+  formatMovementDate,
+  generateMovementId,
+} from './utils/movementHistory';
 import {
   loadDirtyIds,
   loadMinMaxDirty,
@@ -24,6 +30,7 @@ import {
 } from './state/useSheetsSync';
 
 const ITEMS_KEY = 'sugestion_raw_items_v3';
+const MOVEMENTS_KEY = 'mp_sugestion_movements_v2';
 
 export default function App() {
   // By default, the app ALWAYS opens in Tablet Mode (operator).
@@ -35,7 +42,7 @@ export default function App() {
 
   // Strict operator protection: enforce operator tabs only
   useEffect(() => {
-    if (userRole === 'operator' && activeTab !== 'entry' && activeTab !== 'stock') {
+    if (userRole === 'operator' && activeTab !== 'entry' && activeTab !== 'stock' && activeTab !== 'movements') {
       setActiveTab('entry');
     }
   }, [userRole, activeTab]);
@@ -74,6 +81,28 @@ export default function App() {
   useEffect(() => saveDirtyIds(dirtyIds), [dirtyIds]);
   useEffect(() => saveMinMaxDirty(minMaxDirty), [minMaxDirty]);
 
+  // Movements state (History of all stock entries, open bundles, adjustments)
+  const [movements, setMovements] = useState<StockMovement[]>(() => {
+    try {
+      const saved = localStorage.getItem(MOVEMENTS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return INITIAL_STOCK_MOVEMENTS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements));
+    } catch {
+      // storage unavailable
+    }
+  }, [movements]);
+
   // Modals
   const [isPurchaseOrderOpen, setIsPurchaseOrderOpen] = useState(false);
   const [isCloudSettingsOpen, setIsCloudSettingsOpen] = useState(false);
@@ -92,8 +121,20 @@ export default function App() {
     fetch('/api/shared-state')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!active || !data || !data.success || !Array.isArray(data.items) || data.items.length === 0) return;
-        setRawItems((prev) => applyRemoteStock(prev, data.items, loadDirtyIds()).items);
+        if (!active || !data || !data.success) return;
+        if (Array.isArray(data.items) && data.items.length > 0) {
+          setRawItems((prev) => applyRemoteStock(prev, data.items, loadDirtyIds()).items);
+        }
+        if (Array.isArray(data.movements) && data.movements.length > 0) {
+          setMovements((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const toAdd = data.movements.filter((m: StockMovement) => m && m.id && !existingIds.has(m.id));
+            if (toAdd.length === 0) return prev;
+            return [...toAdd, ...prev].sort(
+              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+          });
+        }
       })
       .catch(() => {});
     return () => {
@@ -115,6 +156,7 @@ export default function App() {
     setDirtyIds,
     minMaxDirty,
     monthName: selectedMonth.name,
+    setMovements,
   });
 
   // Derived counts
@@ -147,8 +189,114 @@ export default function App() {
     [selectedMonth.month]
   );
 
+  // Record a stock movement and update inventory
+  const handleRecordMovement = useCallback(
+    async (
+      movData: Omit<StockMovement, 'id' | 'dateFormatted'>,
+      shouldUpdateStock: boolean = true
+    ) => {
+      const id = generateMovementId();
+      const ts = movData.timestamp || new Date().toISOString();
+      const fullMovement: StockMovement = {
+        ...movData,
+        id,
+        timestamp: ts,
+        dateFormatted: formatMovementDate(ts),
+      };
+
+      // 1. Prepend to movements state
+      setMovements((prev) => [fullMovement, ...prev]);
+
+      // 2. If shouldUpdateStock is true (e.g. from MovementsHistoryView), update the item's stock in rawItems!
+      if (shouldUpdateStock) {
+        updateItem(movData.itemId, (item) => {
+          const uPerBto = movData.unitsPerBulto || item.unitsPerBulto || 1;
+          const nextBultos =
+            typeof movData.newBultos === 'number'
+              ? Math.max(0, movData.newBultos)
+              : Math.max(0, item.bultos + (movData.bultosDelta || 0));
+          const nextUnits =
+            typeof movData.newUnits === 'number'
+              ? Math.max(0, movData.newUnits)
+              : Math.max(0, item.totalUnits + (movData.unitsDelta || (movData.bultosDelta || 0) * uPerBto));
+
+          // Update batch if present
+          let updatedBatches = item.batches;
+          if (item.batches && item.batches.length > 0) {
+            if (movData.batchId) {
+              updatedBatches = item.batches.map((b) =>
+                b.id === movData.batchId
+                  ? { ...b, bultos: Math.max(0, (b.bultos || 0) + (movData.bultosDelta || 0)) }
+                  : b
+              );
+            } else {
+              const first = item.batches[0];
+              updatedBatches = [
+                { ...first, bultos: Math.max(0, (first.bultos || 0) + (movData.bultosDelta || 0)) },
+                ...item.batches.slice(1),
+              ];
+            }
+          }
+
+          return {
+            ...item,
+            bultos: nextBultos,
+            totalUnits: nextUnits,
+            batches: updatedBatches,
+            lastUpdated: ts,
+          };
+        });
+      }
+
+      // 3. Persist to server /api/movements
+      try {
+        await fetch('/api/movements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ movement: fullMovement }),
+        });
+      } catch {
+        // saved locally
+      }
+
+      // 4. Forward to Google Sheets if configured
+      if (isSheetsConfigured()) {
+        void callSheets('LOG_MOVEMENT', { movement: fullMovement });
+      }
+    },
+    [updateItem]
+  );
+
   // Dashboard +/- : newBultos is the item total; with several batches apply only the difference to the first one
-  const handleUpdateBultos = (id: string, newBultos: number) =>
+  const handleUpdateBultos = (id: string, newBultos: number) => {
+    const target = rawItems.find((i) => i.id === id);
+    if (target) {
+      const delta = newBultos - target.bultos;
+      if (delta !== 0) {
+        const uPerBto = target.unitsPerBulto || 1;
+        const uDelta = delta * uPerBto;
+        void handleRecordMovement(
+          {
+            itemId: target.id,
+            itemName: target.name,
+            category: target.category,
+            type: delta > 0 ? 'ENTRADA' : 'ABRIR_BULTO',
+            timestamp: new Date().toISOString(),
+            bultosDelta: delta,
+            unitsDelta: uDelta,
+            previousBultos: target.bultos,
+            newBultos,
+            previousUnits: target.totalUnits,
+            newUnits: Math.max(0, target.totalUnits + uDelta),
+            unitsPerBulto: uPerBto,
+            responsible: userRole === 'admin' ? 'Administrador' : 'Operador Depósito',
+            reason: delta > 0 ? 'Ajuste rápido (+1 bto) desde Dashboard' : 'Apertura de bulto (-1 bto) desde Dashboard',
+          },
+          false
+        );
+      }
+    }
+
     updateItem(id, (item) => {
       const batches = item.batches && item.batches.length > 0 ? item.batches : undefined;
       if (!batches) {
@@ -163,6 +311,7 @@ export default function App() {
         allowDirectTotal: false,
       };
     });
+  };
 
   const handleToggleOrdered = async (id: string, isOrdered: boolean) => {
     const target = rawItems.find((i) => i.id === id);
@@ -349,6 +498,7 @@ export default function App() {
             onUpdateBultos={handleUpdateBultos}
             onOpenPurchaseOrder={() => setIsPurchaseOrderOpen(true)}
             onToggleOrdered={handleToggleOrdered}
+            onNavigateToMovements={() => setActiveTab('movements')}
           />
         )}
 
@@ -359,6 +509,8 @@ export default function App() {
             selectedMonth={selectedMonth}
             onUpdateItem={updateItem}
             sync={sync}
+            onRecordMovement={(m) => handleRecordMovement(m, false)}
+            onNavigateToMovements={() => setActiveTab('movements')}
           />
         )}
 
@@ -378,6 +530,16 @@ export default function App() {
             monthlyFactors={monthlyFactors}
             onUpdateItemsMinMax={handleUpdateItemsMinMax}
             onSyncMinMaxToSheets={handleSyncMinMaxToSheets}
+          />
+        )}
+
+        {/* VIEW 5: Historial de Movimientos y Cargas de Stock (Operator & Admin) */}
+        {activeTab === 'movements' && (
+          <MovementsHistoryView
+            movements={movements}
+            items={computedItems}
+            userRole={userRole}
+            onRecordMovement={handleRecordMovement}
           />
         )}
       </main>

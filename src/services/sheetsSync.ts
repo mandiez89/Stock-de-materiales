@@ -59,13 +59,14 @@ export function setSessionAdminPin(pin: string) {
   writeStorage(sessionStorage, ADMIN_PIN_KEY, pin);
 }
 
-export type SheetsAction = 'PING' | 'VERIFY_PIN' | 'GET_STATE' | 'UPDATE_STOCK' | 'UPDATE_MIN_MAX' | 'LOG_ORDER';
+export type SheetsAction = 'PING' | 'VERIFY_PIN' | 'GET_STATE' | 'UPDATE_STOCK' | 'UPDATE_MIN_MAX' | 'LOG_ORDER' | 'LOG_MOVEMENT';
 
 export interface SheetsPayload {
   metadata?: any;
   items?: MaterialItem[];
   minMaxMatrix?: MaterialItem[];
   order?: any;
+  movement?: any;
   adminPin?: string;
 }
 

@@ -24,6 +24,25 @@ interface ServerState {
     orderedAt: string;
     month?: string;
   }>;
+  movements: Array<{
+    id: string;
+    itemId: string;
+    itemName: string;
+    category?: string;
+    type: 'ENTRADA' | 'ABRIR_BULTO' | 'SALIDA' | 'AJUSTE' | 'RECEPCION_PEDIDO';
+    timestamp: string;
+    dateFormatted: string;
+    bultosDelta: number;
+    unitsDelta: number;
+    previousBultos: number;
+    newBultos: number;
+    previousUnits: number;
+    newUnits: number;
+    unitsPerBulto: number;
+    batchId?: string;
+    responsible: string;
+    reason?: string;
+  }>;
   minMax?: any;
   lastUpdated: string;
 }
@@ -32,12 +51,19 @@ function loadServerState(): ServerState {
   try {
     if (fs.existsSync(DB_FILE)) {
       const content = fs.readFileSync(DB_FILE, "utf-8");
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      return {
+        items: parsed.items || {},
+        orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+        movements: Array.isArray(parsed.movements) ? parsed.movements : [],
+        minMax: parsed.minMax || null,
+        lastUpdated: parsed.lastUpdated || new Date().toISOString(),
+      };
     }
   } catch (err) {
     console.error("Error reading server state:", err);
   }
-  return { items: {}, orders: [], minMax: null, lastUpdated: new Date().toISOString() };
+  return { items: {}, orders: [], movements: [], minMax: null, lastUpdated: new Date().toISOString() };
 }
 
 let serverState = loadServerState();
@@ -55,15 +81,79 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// GET Shared Database State (so any connected device gets the live stock & orders)
+// GET Shared Database State (so any connected device gets the live stock & orders & movements)
 app.get("/api/shared-state", (_req, res) => {
   res.json({
     success: true,
     items: Object.values(serverState.items),
     orders: serverState.orders,
+    movements: serverState.movements || [],
     minMax: serverState.minMax,
     lastUpdated: serverState.lastUpdated,
   });
+});
+
+// GET Stock Movements
+app.get("/api/movements", (_req, res) => {
+  res.json({
+    success: true,
+    movements: serverState.movements || [],
+    lastUpdated: serverState.lastUpdated,
+  });
+});
+
+// POST Register Stock Movement and update inventory
+app.post("/api/movements", (req, res) => {
+  try {
+    const { movement, movements } = req.body;
+    const ts = new Date().toISOString();
+    const toAdd = Array.isArray(movements) ? movements : movement ? [movement] : [];
+
+    if (toAdd.length === 0) {
+      return res.status(400).json({ success: false, error: "No se proporcionaron datos de movimiento." });
+    }
+
+    serverState.movements = serverState.movements || [];
+
+    toAdd.forEach((m: any) => {
+      if (!m || !m.itemId) return;
+      const movId = m.id || `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const movRecord = {
+        ...m,
+        id: movId,
+        timestamp: m.timestamp || ts,
+        dateFormatted: m.dateFormatted || new Date().toLocaleString("es-AR"),
+      };
+
+      // Add to front of history
+      serverState.movements.unshift(movRecord);
+
+      // Update the item's current stock values in server state
+      const item = serverState.items[m.itemId] || { id: m.itemId, name: m.itemName };
+      if (typeof m.newBultos === "number") item.bultos = m.newBultos;
+      if (typeof m.newUnits === "number") item.totalUnits = m.newUnits;
+      if (typeof m.unitsPerBulto === "number" && m.unitsPerBulto > 0) item.unitsPerBulto = m.unitsPerBulto;
+      item.lastUpdated = ts;
+      serverState.items[m.itemId] = item;
+    });
+
+    // Keep history capped at 1000 items
+    if (serverState.movements.length > 1000) {
+      serverState.movements = serverState.movements.slice(0, 1000);
+    }
+
+    serverState.lastUpdated = ts;
+    saveServerState();
+
+    res.json({
+      success: true,
+      message: `${toAdd.length} movimiento(s) registrado(s) en la base de datos`,
+      movements: serverState.movements,
+      lastUpdated: serverState.lastUpdated,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // POST Mark Order directly into the shared database and optionally forward to Google Sheets
@@ -238,9 +328,10 @@ app.post("/api/mark-orders-batch", async (req, res) => {
 // POST Sync stock counts to central server database
 app.post("/api/sync-stock", (req, res) => {
   try {
-    const { items } = req.body;
+    const { items, movements } = req.body;
+    const ts = new Date().toISOString();
+
     if (Array.isArray(items) && items.length > 0) {
-      const ts = new Date().toISOString();
       items.forEach((item: any) => {
         if (item && item.id) {
           serverState.items[item.id] = {
@@ -251,12 +342,35 @@ app.post("/api/sync-stock", (req, res) => {
         }
       });
       serverState.lastUpdated = ts;
+    }
+
+    if (Array.isArray(movements) && movements.length > 0) {
+      serverState.movements = serverState.movements || [];
+      movements.forEach((m: any) => {
+        if (!m || !m.itemId) return;
+        const movRecord = {
+          ...m,
+          id: m.id || `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          timestamp: m.timestamp || ts,
+          dateFormatted: m.dateFormatted || new Date().toLocaleString("es-AR"),
+        };
+        serverState.movements.unshift(movRecord);
+      });
+      if (serverState.movements.length > 1000) {
+        serverState.movements = serverState.movements.slice(0, 1000);
+      }
+      serverState.lastUpdated = ts;
+    }
+
+    if ((Array.isArray(items) && items.length > 0) || (Array.isArray(movements) && movements.length > 0)) {
       saveServerState();
     }
+
     res.json({
       success: true,
-      message: "Stock guardado en base de datos central",
+      message: "Stock y movimientos guardados en base de datos central",
       count: items?.length || 0,
+      movementsCount: movements?.length || 0,
       lastUpdated: serverState.lastUpdated,
     });
   } catch (err: any) {

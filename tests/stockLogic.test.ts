@@ -138,3 +138,45 @@ describe('min/max helpers', () => {
     expect(i.monthlyMinMax).toEqual({ 1: { min: 9, max: 9 } });
   });
 });
+
+describe('movementHistory helpers', () => {
+  it('formats date and time correctly', async () => {
+    const { formatMovementDate, formatMovementShortDate, formatMovementTimeOnly } = await import(
+      '../src/utils/movementHistory'
+    );
+    const d = new Date(2026, 8, 28, 14, 30, 15); // 28/09/2026 14:30:15
+    expect(formatMovementShortDate(d)).toBe('28/09/2026');
+    expect(formatMovementTimeOnly(d)).toBe('14:30:15');
+    expect(formatMovementDate(d)).toBe('28/09/2026 14:30:15');
+  });
+
+  it('exports movements to CSV properly', async () => {
+    const { exportMovementsToCSV } = await import('../src/utils/movementHistory');
+    const csv = exportMovementsToCSV([
+      {
+        id: 'mov-1',
+        itemId: 'caja-1',
+        itemName: 'Caja 1 Bombones',
+        category: 'Cajas',
+        type: 'ENTRADA',
+        timestamp: '2026-09-28T14:30:00.000Z',
+        dateFormatted: '28/09/2026 14:30:00',
+        bultosDelta: 5,
+        unitsDelta: 2500,
+        previousBultos: 10,
+        newBultos: 15,
+        previousUnits: 5000,
+        newUnits: 7500,
+        unitsPerBulto: 500,
+        responsible: 'Operador Depósito',
+        reason: 'Carga rápida (+5 btos)',
+      },
+    ]);
+    expect(csv).toContain('Fecha y Hora');
+    expect(csv).toContain('Caja 1 Bombones');
+    expect(csv).toContain('+5');
+    expect(csv).toContain('+2500');
+    expect(csv).toContain('10');
+    expect(csv).toContain('15');
+  });
+});
