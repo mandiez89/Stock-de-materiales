@@ -294,6 +294,12 @@ export const CurrentStockView: React.FC<CurrentStockViewProps> = ({
                             </span>
                           )}
                         </div>
+                        {item.batches && item.batches.length > 1 && (
+                          <div className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5 font-mono mt-1 inline-flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold">{item.batches.length} medidas de bulto:</span>
+                            <span>{item.batches.map((b, idx) => `P${idx + 1}: ${b.bultos} btos × ${b.unitsPerBulto} un.`).join(' + ')}</span>
+                          </div>
+                        )}
                         {item.notes && (
                           <span className="text-xs text-slate-500 font-medium block mt-0.5">
                             {item.notes}

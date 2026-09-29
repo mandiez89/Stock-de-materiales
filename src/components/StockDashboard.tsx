@@ -472,8 +472,9 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
                           {item.name}
                         </div>
                         {item.batches && item.batches.length > 1 && (
-                          <div className="text-[10px] text-indigo-600 font-mono mt-0.5">
-                            {item.batches.length} partidas de bultos
+                          <div className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5 font-mono mt-1 inline-flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold">{item.batches.length} partidas:</span>
+                            <span>{item.batches.map((b, idx) => `P${idx + 1}: ${b.bultos} btos × ${b.unitsPerBulto} un.`).join(' + ')}</span>
                           </div>
                         )}
                         {item.notes && (

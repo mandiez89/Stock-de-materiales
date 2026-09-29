@@ -71,6 +71,18 @@ describe('computeMaterialCalculations', () => {
     const item = base({ isDirectUnits: true, totalUnits: 1234, batches: [{ id: 'b1', bultos: 1, unitsPerBulto: 100 }] });
     expect(computeMaterialCalculations(item, 1, 9).totalUnits).toBe(1234);
   });
+  it('correctly calculates totals when adding another bulto measure with different unitsPerBulto', () => {
+    const item = base({
+      batches: [
+        { id: 'b1', bultos: 10, unitsPerBulto: 100 }, // 1000 un
+        { id: 'b2', bultos: 5, unitsPerBulto: 80 },   // 400 un
+        { id: 'b3', bultos: 2, unitsPerBulto: 50 },   // 100 un
+      ],
+    });
+    const c = computeMaterialCalculations(item, 1, 9);
+    expect(c.bultos).toBe(17);
+    expect(c.totalUnits).toBe(1500);
+  });
 });
 
 describe('normalizeRawItem', () => {

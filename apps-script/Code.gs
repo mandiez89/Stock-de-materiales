@@ -432,6 +432,57 @@ function recordPurchaseOrder(order) {
   return { rowsWritten: items.length };
 }
 
+// Recalcula el stock consolidado sumando todos los movimientos de la hoja Movimientos
+function recalculateStockFromMovements() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var movSheet = ss.getSheetByName(MOVEMENTS_SHEET);
+  var stockSheet = ss.getSheetByName(STOCK_SHEET);
+  if (!movSheet || !stockSheet) {
+    return { success: false, error: "Faltan hojas Movimientos o Stock_Actual" };
+  }
+
+  var movLastRow = movSheet.getLastRow();
+  var stockLastRow = stockSheet.getLastRow();
+  if (stockLastRow < 2) return { success: true, updated: 0 };
+
+  // Agrupar movimientos por ID_Material
+  var totals = {};
+  if (movLastRow >= 2) {
+    var movData = movSheet.getRange(2, 1, movLastRow - 1, MOVEMENTS_HEADERS.length).getValues();
+    movData.forEach(function (row) {
+      var id = String(row[2]); // Columna C: ID_Material
+      if (!id) return;
+      if (!totals[id]) totals[id] = { bultos: 0, units: 0, lastTs: "" };
+      totals[id].bultos += Number(row[6] || 0); // Columna G: Bultos_Movidos
+      totals[id].units += Number(row[8] || 0);  // Columna I: Unidades_Movidas
+      var ts = isoOf(row[13]);
+      if (!totals[id].lastTs || ts > totals[id].lastTs) totals[id].lastTs = ts;
+    });
+  }
+
+  // Actualizar Stock_Actual
+  var stockData = stockSheet.getRange(2, 1, stockLastRow - 1, STOCK_HEADERS.length).getValues();
+  var updated = 0;
+  stockData.forEach(function (row, idx) {
+    var id = String(row[0]);
+    if (!id || !totals[id]) return;
+
+    var newBultos = Math.max(0, totals[id].bultos);
+    var uPerBto = Number(row[4] || 1);
+    var newUnits = totals[id].units > 0 ? totals[id].units : (newBultos * uPerBto);
+
+    // Escribir Bultos (col D = 4) y Total Unidades (col F = 6)
+    stockSheet.getRange(idx + 2, 4).setValue(newBultos);
+    stockSheet.getRange(idx + 2, 6).setValue(newUnits);
+    if (totals[id].lastTs) {
+      stockSheet.getRange(idx + 2, 12).setValue(totals[id].lastTs);
+    }
+    updated++;
+  });
+
+  return { success: true, materialsUpdated: updated };
+}
+
 function isoOf(value) {
   if (!value) return "";
   if (Object.prototype.toString.call(value) === "[object Date]") return value.toISOString();

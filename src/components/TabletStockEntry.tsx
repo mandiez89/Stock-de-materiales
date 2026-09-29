@@ -167,7 +167,9 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
 
   // Set units per bulto for a specific batch
   const handleSetBatchUnitsPerBulto = (itemId: string, batchId: string, value: number) =>
-    setBatchField(itemId, batchId, () => ({ unitsPerBulto: Math.max(1, isNaN(value) ? 1 : Math.floor(value)) }));
+    setBatchField(itemId, batchId, () => ({
+      unitsPerBulto: isNaN(value) ? 0 : Math.max(0, Math.floor(value)),
+    }));
 
   // Add extra batch line (e.g. 15 bultos de 85 unidades)
   const handleAddBatch = (itemId: string) =>
@@ -619,30 +621,47 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                                 </button>
                               </div>
 
-                              {/* BATCH CALCULATION BAR (Multiplication & Subtotal) */}
-                              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200/70">
-                                <div className="flex items-center gap-1.5 text-slate-600">
-                                  <span className="font-bold text-slate-500 text-[11px]">Medida:</span>
-                                  <div className="inline-flex items-center bg-white border border-slate-300 rounded-lg px-2 py-0.5 shadow-2xs focus-within:border-indigo-500">
+                              {/* BATCH CALCULATION BAR (Multiplication & Subtotal) - ENLARGED TOUCH CONTROLS */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2.5 mt-1 border-t-2 border-slate-200/90 bg-slate-50/70 p-2 sm:p-2.5 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                  <label
+                                    htmlFor={`units-${item.id}-${batch.id}`}
+                                    className="font-black text-slate-700 text-xs sm:text-sm whitespace-nowrap flex items-center gap-1.5"
+                                  >
+                                    <Package className="w-4 h-4 text-indigo-600 shrink-0" />
+                                    <span>Unidades por bulto:</span>
+                                  </label>
+                                  <div className="inline-flex items-center bg-white border-2 border-slate-300 hover:border-slate-400 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-xs transition-all">
                                     <input
+                                      id={`units-${item.id}-${batch.id}`}
                                       type="number"
                                       min="1"
-                                      value={batch.unitsPerBulto}
-                                      onChange={(e) =>
-                                        handleSetBatchUnitsPerBulto(item.id, batch.id, parseInt(e.target.value, 10))
-                                      }
-                                      className="w-12 text-center font-mono font-bold text-xs text-slate-900 bg-transparent outline-hidden"
+                                      value={batch.unitsPerBulto === 0 ? '' : batch.unitsPerBulto}
+                                      onChange={(e) => {
+                                        const raw = e.target.value;
+                                        const val = raw === '' ? 0 : parseInt(raw, 10);
+                                        handleSetBatchUnitsPerBulto(item.id, batch.id, val);
+                                      }}
+                                      onBlur={() => {
+                                        if (!batch.unitsPerBulto || batch.unitsPerBulto < 1) {
+                                          handleSetBatchUnitsPerBulto(item.id, batch.id, 1);
+                                        }
+                                      }}
+                                      className="w-20 sm:w-24 text-center font-mono font-black text-base sm:text-lg text-slate-900 bg-transparent outline-hidden"
+                                      title="Cantidad de unidades en cada bulto cerrado de esta partida"
                                     />
-                                    <span className="text-[10px] text-slate-400 font-semibold ml-1">un/bto</span>
+                                    <span className="text-xs sm:text-sm text-slate-400 font-bold ml-1.5 select-none">
+                                      un/bto
+                                    </span>
                                   </div>
                                 </div>
 
-                                <div className="text-right">
-                                  <span className="text-[10px] text-slate-400 font-medium mr-1">Subtotal:</span>
-                                  <span className="font-mono font-black text-xs sm:text-sm text-slate-900">
+                                <div className="flex items-center justify-between sm:justify-end gap-1.5 text-right bg-white sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-lg border sm:border-0 border-slate-200">
+                                  <span className="text-xs text-slate-500 font-semibold">Subtotal partida:</span>
+                                  <span className="font-mono font-black text-sm sm:text-base text-slate-900">
                                     {batchSubtotal.toLocaleString('es-AR')}
                                   </span>
-                                  <span className="text-[10px] text-slate-500 ml-0.5">un.</span>
+                                  <span className="text-xs text-slate-500 font-medium">un.</span>
                                 </div>
                               </div>
                             </div>
@@ -650,14 +669,15 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                         })}
 
                         {/* CARD ROW 3: Secondary Actions (+ Otra Medida / Unidades Sueltas) */}
-                        <div className="flex items-center justify-between gap-2 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5">
                           <button
                             type="button"
                             onClick={() => handleAddBatch(item.id)}
-                            className="text-[11px] font-bold text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-lg border border-dashed border-indigo-300 flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                            className="h-10 sm:h-11 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 hover:text-indigo-900 border-2 border-dashed border-indigo-300 hover:border-indigo-400 rounded-xl flex items-center gap-2 text-xs sm:text-sm font-extrabold transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                            title="Agregar otra partida de bultos con diferente cantidad de unidades"
                           >
-                            <Plus className="w-3 h-3" />
-                            <span>+ Otra medida de bulto</span>
+                            <Plus className="w-4 h-4 stroke-[2.5]" />
+                            <span>+ Otra Medida de bulto</span>
                           </button>
 
                           {item.allowDirectTotal ? (
