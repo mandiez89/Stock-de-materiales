@@ -211,7 +211,22 @@ function recordMovement(mov) {
   if (!mov || !mov.itemId) return { written: 0 };
   var sheet = getSheet(MOVEMENTS_SHEET, MOVEMENTS_HEADERS);
 
-  var movId = mov.id || ("MOV-" + Date.now());
+  var movId = String(mov.id || ("MOV-" + Date.now()));
+
+  // DEDUPLICACIÓN ESTRICTA:
+  // Si este ID de movimiento ya existe en la hoja, se descarta para evitar filas dobles por reintentos de red
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    var checkCount = Math.min(lastRow - 1, 100);
+    var startRow = Math.max(2, lastRow - checkCount + 1);
+    var existingIds = sheet.getRange(startRow, 1, checkCount, 1).getValues();
+    for (var i = 0; i < existingIds.length; i++) {
+      if (String(existingIds[i][0]).trim() === movId.trim()) {
+        return { movementId: movId, rowsWritten: 0, skippedDuplicate: true };
+      }
+    }
+  }
+
   var dateStr = mov.dateFormatted || new Date().toLocaleString("es-AR");
   var ts = mov.timestamp || new Date().toISOString();
 
@@ -254,12 +269,26 @@ function recordMovementsBatch(movements) {
   if (!Array.isArray(movements) || movements.length === 0) return { written: 0 };
   var sheet = getSheet(MOVEMENTS_SHEET, MOVEMENTS_HEADERS);
 
+  var existingSet = {};
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    var checkCount = Math.min(lastRow - 1, 200);
+    var startRow = Math.max(2, lastRow - checkCount + 1);
+    var existingIds = sheet.getRange(startRow, 1, checkCount, 1).getValues();
+    for (var i = 0; i < existingIds.length; i++) {
+      existingSet[String(existingIds[i][0]).trim()] = true;
+    }
+  }
+
   var rows = [];
   var stockUpdates = [];
 
   movements.forEach(function (mov) {
     if (!mov || !mov.itemId) return;
-    var movId = mov.id || ("MOV-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5));
+    var movId = String(mov.id || ("MOV-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5)));
+    if (existingSet[movId.trim()]) return;
+    existingSet[movId.trim()] = true;
+
     var dateStr = mov.dateFormatted || new Date().toLocaleString("es-AR");
     var ts = mov.timestamp || new Date().toISOString();
 

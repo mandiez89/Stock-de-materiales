@@ -107,6 +107,28 @@ export async function callSheets(
 
   const body = { ...payload, action, token: accessToken, adminPin: payload.adminPin ?? getSessionAdminPin() };
 
+  // 1. Priorizar el proxy del servidor (/api/sync-sheets).
+  // En navegadores, las llamadas directas POST a Google Apps Script retornan redirección HTTP 302
+  // hacia script.googleusercontent.com, lo que provoca que el navegador lance un error CORS
+  // LUEGO de que Apps Script ya ejecutó la acción. La reintento en catch provocaba que la misma
+  // fila se grabase dos veces en Google Sheets.
+  // Node.js sigue la redirección sin problemas de CORS y devuelve la respuesta limpia en un único request.
+  try {
+    const proxyRes = await fetch('/api/sync-sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: url, payload: body }),
+    });
+    if (proxyRes.ok) {
+      const fb = await proxyRes.json();
+      if (fb.forward && fb.data) return interpret(fb.data);
+      if (fb.data) return interpret(fb.data);
+    }
+  } catch {
+    // Si el proxy no responde (entorno estático sin Node.js), continúa a intento directo
+  }
+
+  // 2. Intento directo como alternativa si no hay backend activo
   let text: string;
   let ok: boolean;
   try {
@@ -119,20 +141,6 @@ export async function callSheets(
     text = await response.text();
     ok = response.ok;
   } catch (networkError: any) {
-    // Some networks block the direct call; retry through the serverless forwarder if deployed
-    try {
-      const fallbackRes = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: url, payload: body }),
-      });
-      if (fallbackRes.ok) {
-        const fb = await fallbackRes.json();
-        if (fb.forward && fb.data) return interpret(fb.data);
-      }
-    } catch {
-      // ignore secondary fallback error
-    }
     return {
       success: false,
       message: `Sin conexión con Google Sheets: ${networkError?.message || 'error de red'}.`,

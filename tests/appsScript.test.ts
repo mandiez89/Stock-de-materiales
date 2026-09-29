@@ -170,6 +170,30 @@ describe('Apps Script', () => {
     expect(state.items[0].id).toBe('caja-1');
     expect(state.items[0].bultos).toBe(15);
     expect(state.items[0].totalUnits).toBe(7500);
+
+    // If the exact same movement is received again (e.g. network retry or duplicate request),
+    // it must NOT append a second row in Movimientos
+    const duplicateRes = api.post({
+      action: 'LOG_MOVEMENT',
+      token: 'secret',
+      movement: {
+        id: 'mov-100',
+        itemId: 'caja-1',
+        itemName: 'Caja 1',
+        category: 'Cajas',
+        type: 'ENTRADA',
+        bultosDelta: 5,
+        unitsPerBulto: 500,
+        unitsDelta: 2500,
+        newBultos: 15,
+        newUnits: 7500,
+        responsible: 'Operador Depósito',
+        reason: 'Carga fábrica',
+      },
+    });
+    expect(duplicateRes.success).toBe(true);
+    expect(duplicateRes.details.skippedDuplicate).toBe(true);
+    expect(api.sheets['Movimientos'].rows).toHaveLength(2); // Still only 2 rows (headers + 1 row)
   });
 
   it('initializes spreadsheet structure with all 4 sheets', () => {

@@ -405,7 +405,13 @@ app.post("/api/sync-sheets", async (req, res) => {
         body: JSON.stringify(payload),
         redirect: "follow",
       });
-      const data = await response.json();
+      const text = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { success: response.ok, message: text.slice(0, 300) };
+      }
       return res.json({ success: true, forward: true, data });
     }
 
