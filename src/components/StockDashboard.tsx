@@ -24,7 +24,6 @@ interface StockDashboardProps {
   onUpdateBultos: (id: string, newBultos: number) => void;
   onOpenPurchaseOrder: () => void;
   onToggleOrdered?: (id: string, isOrdered: boolean) => void;
-  onNavigateToMovements?: () => void;
 }
 
 export const StockDashboard: React.FC<StockDashboardProps> = ({
@@ -33,7 +32,6 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
   onUpdateBultos,
   onOpenPurchaseOrder,
   onToggleOrdered,
-  onNavigateToMovements,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -421,18 +419,6 @@ export const StockDashboard: React.FC<StockDashboardProps> = ({
             >
               🟢 Óptimos ({optimalItems.length})
             </button>
-
-            {onNavigateToMovements && (
-              <button
-                type="button"
-                onClick={onNavigateToMovements}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 font-bold rounded-lg border border-slate-200 text-xs transition-colors cursor-pointer ml-auto"
-                title="Ver historial de movimientos y cuándo se cargó stock con fecha y hora"
-              >
-                <History className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Historial de Movimientos</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

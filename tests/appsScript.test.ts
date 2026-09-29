@@ -139,4 +139,45 @@ describe('Apps Script', () => {
     expect(state.minMax.caja.months[2]).toEqual({ min: 1, max: 2 });
     expect(state.minMax.caja.leadDays).toBe(12);
   });
+
+  it('records movements in the Movimientos sheet and updates stock', () => {
+    const res = api.post({
+      action: 'LOG_MOVEMENT',
+      token: 'secret',
+      movement: {
+        id: 'mov-100',
+        itemId: 'caja-1',
+        itemName: 'Caja 1',
+        category: 'Cajas',
+        type: 'ENTRADA',
+        bultosDelta: 5,
+        unitsPerBulto: 500,
+        unitsDelta: 2500,
+        newBultos: 15,
+        newUnits: 7500,
+        responsible: 'Operador Depósito',
+        reason: 'Carga fábrica',
+      },
+    });
+    expect(res.success).toBe(true);
+    expect(api.sheets['Movimientos']).toBeDefined();
+    expect(api.sheets['Movimientos'].rows).toHaveLength(2); // Headers + 1 row
+    expect(api.sheets['Movimientos'].rows[1][2]).toBe('caja-1');
+    expect(api.sheets['Movimientos'].rows[1][6]).toBe(5);
+
+    const state = api.post({ action: 'GET_STATE', token: 'secret' });
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0].id).toBe('caja-1');
+    expect(state.items[0].bultos).toBe(15);
+    expect(state.items[0].totalUnits).toBe(7500);
+  });
+
+  it('initializes spreadsheet structure with all 4 sheets', () => {
+    const res = api.post({ action: 'SETUP_STRUCTURE', token: 'secret' });
+    expect(res.success).toBe(true);
+    expect(api.sheets['Stock_Actual']).toBeDefined();
+    expect(api.sheets['Movimientos']).toBeDefined();
+    expect(api.sheets['Parametros_MinMax']).toBeDefined();
+    expect(api.sheets['Ordenes_Compra']).toBeDefined();
+  });
 });

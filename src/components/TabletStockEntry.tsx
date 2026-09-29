@@ -30,7 +30,6 @@ interface TabletStockEntryProps {
   onUpdateItem: (id: string, change: (item: MaterialItem) => MaterialItem) => void;
   sync: SheetsSyncState;
   onRecordMovement?: (movement: Omit<StockMovement, 'id' | 'dateFormatted'>) => Promise<void> | void;
-  onNavigateToMovements?: () => void;
 }
 
 // Category visual badges and styling for instant recognition
@@ -93,7 +92,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
   onUpdateItem,
   sync,
   onRecordMovement,
-  onNavigateToMovements,
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -263,18 +261,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
 
           {/* Cloud Auto-Sync Indicator & Manual Button */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {onNavigateToMovements && (
-              <button
-                type="button"
-                onClick={onNavigateToMovements}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-all cursor-pointer active:scale-95 shadow-2xs"
-                title="Ver historial de movimientos de stock con fecha y hora"
-              >
-                <History className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline text-[11px]">Ver Historial</span>
-              </button>
-            )}
-
             <button
               type="button"
               onClick={handleForceManualSync}
@@ -493,17 +479,6 @@ export const TabletStockEntry: React.FC<TabletStockEntryProps> = ({
                             <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
                               {item.notes}
                             </p>
-                          )}
-                          {onNavigateToMovements && (
-                            <button
-                              type="button"
-                              onClick={onNavigateToMovements}
-                              className="inline-flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-800 font-bold mt-1 cursor-pointer transition-colors"
-                              title="Ver historial de movimientos de este material con fecha y hora"
-                            >
-                              <History className="w-3 h-3 text-indigo-500" />
-                              <span>Ver movimientos</span>
-                            </button>
                           )}
                           {item.isOrdered && (
                             <div className="flex items-center gap-1.5 bg-sky-50 border border-sky-300 text-sky-950 px-2.5 py-1 rounded-xl text-xs font-bold mt-1.5 shadow-2xs">

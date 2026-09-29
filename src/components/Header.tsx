@@ -22,7 +22,7 @@ import { MonthlyFactor, UserRole } from '../types';
 import { SheetsSyncState } from '../state/useSheetsSync';
 import { callSheets, isSheetsConfigured, setSessionAdminPin } from '../services/sheetsSync';
 
-export type AppTab = 'dashboard' | 'entry' | 'stock' | 'movements' | 'minmax';
+export type AppTab = 'dashboard' | 'entry' | 'stock' | 'minmax';
 
 interface HeaderProps {
   activeTab: AppTab;
@@ -285,18 +285,6 @@ export const Header: React.FC<HeaderProps> = ({
                   <PackageCheck className="w-5 h-5" />
                   <span>Stock Actual Contado</span>
                 </button>
-
-                <button
-                  onClick={() => setActiveTab('movements')}
-                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm sm:text-base font-black transition-all cursor-pointer ${
-                    activeTab === 'movements'
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'text-slate-200 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <History className="w-5 h-5" />
-                  <span>Historial de Movimientos</span>
-                </button>
               </>
             ) : (
               /* ADMIN TABS: COMPLETE ARCHITECTURE */
@@ -340,18 +328,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <PackageCheck className="w-4 h-4" />
                   <span>Stock Actual Contado</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('movements')}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                    activeTab === 'movements'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <History className="w-4 h-4" />
-                  <span>Historial de Movimientos</span>
                 </button>
 
                 <button

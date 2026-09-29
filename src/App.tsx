@@ -10,7 +10,6 @@ import { Header, AppTab } from './components/Header';
 import { StockDashboard } from './components/StockDashboard';
 import { TabletStockEntry } from './components/TabletStockEntry';
 import { CurrentStockView } from './components/CurrentStockView';
-import { MovementsHistoryView } from './components/MovementsHistoryView';
 import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView';
 import { CloudSyncSettingsModal } from './components/CloudSyncSettingsModal';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
@@ -42,7 +41,7 @@ export default function App() {
 
   // Strict operator protection: enforce operator tabs only
   useEffect(() => {
-    if (userRole === 'operator' && activeTab !== 'entry' && activeTab !== 'stock' && activeTab !== 'movements') {
+    if (userRole === 'operator' && activeTab !== 'entry' && activeTab !== 'stock') {
       setActiveTab('entry');
     }
   }, [userRole, activeTab]);
@@ -498,7 +497,6 @@ export default function App() {
             onUpdateBultos={handleUpdateBultos}
             onOpenPurchaseOrder={() => setIsPurchaseOrderOpen(true)}
             onToggleOrdered={handleToggleOrdered}
-            onNavigateToMovements={() => setActiveTab('movements')}
           />
         )}
 
@@ -510,7 +508,6 @@ export default function App() {
             onUpdateItem={updateItem}
             sync={sync}
             onRecordMovement={(m) => handleRecordMovement(m, false)}
-            onNavigateToMovements={() => setActiveTab('movements')}
           />
         )}
 
@@ -530,16 +527,6 @@ export default function App() {
             monthlyFactors={monthlyFactors}
             onUpdateItemsMinMax={handleUpdateItemsMinMax}
             onSyncMinMaxToSheets={handleSyncMinMaxToSheets}
-          />
-        )}
-
-        {/* VIEW 5: Historial de Movimientos y Cargas de Stock (Operator & Admin) */}
-        {activeTab === 'movements' && (
-          <MovementsHistoryView
-            movements={movements}
-            items={computedItems}
-            userRole={userRole}
-            onRecordMovement={handleRecordMovement}
           />
         )}
       </main>
