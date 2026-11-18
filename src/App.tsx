@@ -14,6 +14,7 @@ import { ProductMonthlyMinMaxView } from './components/ProductMonthlyMinMaxView'
 import { CloudSyncSettingsModal } from './components/CloudSyncSettingsModal';
 import { PurchaseOrderModal } from './components/PurchaseOrderModal';
 import { callSheets, getSheetsConfig, isSheetsConfigured } from './services/sheetsSync';
+import { useStockAlerts } from './services/stockAlerts';
 import { applyRemoteStock, mergeMinMaxEdits, mergeSavedItems, normalizeRawItem } from './state/stockState';
 import {
   INITIAL_STOCK_MOVEMENTS,
@@ -157,6 +158,9 @@ export default function App() {
     monthName: selectedMonth.name,
     setMovements,
   });
+
+  // Real-time low-stock push & email alert monitor (excludes items marked as Ordered)
+  const alerts = useStockAlerts(computedItems, setToastMessage);
 
   // Derived counts
   const criticalCount = useMemo(
@@ -485,6 +489,8 @@ export default function App() {
         criticalCount={criticalCount}
         totalUnitsToOrder={totalUnitsToOrder}
         sync={sync}
+        alerts={alerts}
+        onToggleOrdered={handleToggleOrdered}
       />
 
       {/* Main Content Area */}
@@ -570,6 +576,7 @@ export default function App() {
         items={computedItems}
         selectedMonth={selectedMonth}
         sync={sync}
+        alerts={alerts}
       />
 
       {/* Floating Database Sync Toast */}

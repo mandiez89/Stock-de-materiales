@@ -50,13 +50,26 @@ class FakeSheet {
 
 function loadScript(props: Record<string, string>) {
   const sheets: Record<string, FakeSheet> = {};
+  const sentEmails: Array<{ to: string; subject: string; htmlBody: string }> = [];
   const ss = {
     getSheetByName: (n: string) => sheets[n] || null,
     insertSheet: (n: string) => (sheets[n] = new FakeSheet()),
   };
   const context: any = {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k: string) => props[k] ?? null }) },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k: string) => props[k] ?? null,
+        setProperty: (k: string, v: string) => {
+          props[k] = v;
+        },
+      }),
+    },
+    MailApp: {
+      sendEmail: (opts: { to: string; subject: string; htmlBody: string }) => {
+        sentEmails.push(opts);
+      },
+    },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     ContentService: {
       MimeType: { JSON: 'json' },
@@ -66,7 +79,7 @@ function loadScript(props: Record<string, string>) {
   vm.createContext(context);
   vm.runInContext(readFileSync(resolve(__dirname, '../apps-script/Code.gs'), 'utf8'), context);
   const post = (body: any) => context.doPost({ postData: { contents: JSON.stringify(body) } });
-  return { post, sheets };
+  return { post, sheets, sentEmails };
 }
 
 const item = (bultos: number, lastUpdated: string) => ({
@@ -203,5 +216,60 @@ describe('Apps Script', () => {
     expect(api.sheets['Movimientos']).toBeDefined();
     expect(api.sheets['Parametros_MinMax']).toBeDefined();
     expect(api.sheets['Ordenes_Compra']).toBeDefined();
+  });
+
+  it('sends automatic low-stock email alerts on CRITICO/PEDIR and mutes ordered items', () => {
+    const cfgRes = api.post({
+      action: 'SET_ALERT_CONFIG',
+      token: 'secret',
+      alertConfig: {
+        alertEmail: 'compras@sugestion.com',
+        triggerLevel: 'CRITICO_AND_PEDIR',
+        muteOrderedItems: true,
+      },
+    });
+    expect(cfgRes.success).toBe(true);
+    expect(cfgRes.alertEmail).toBe('compras@sugestion.com');
+
+    // Item drops into CRITICO and is NOT ordered -> should trigger 1 email
+    api.post({
+      action: 'UPDATE_STOCK',
+      token: 'secret',
+      items: [
+        {
+          id: 'caja-critica',
+          category: 'Cajas',
+          name: 'Caja Crítica',
+          bultos: 1,
+          unitsPerBulto: 100,
+          totalUnits: 100,
+          minStockAdjusted: 500,
+          maxStockAdjusted: 1000,
+          status: 'CRITICO',
+          unitsToOrder: 900,
+          isOrdered: false,
+          lastUpdated: '2026-09-05T10:00:00.000Z',
+        },
+        {
+          id: 'caja-ya-pedida',
+          category: 'Cajas',
+          name: 'Caja Ya Pedida',
+          bultos: 1,
+          unitsPerBulto: 100,
+          totalUnits: 100,
+          minStockAdjusted: 500,
+          maxStockAdjusted: 1000,
+          status: 'CRITICO',
+          unitsToOrder: 900,
+          isOrdered: true,
+          lastUpdated: '2026-09-05T10:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(api.sentEmails).toHaveLength(1);
+    expect(api.sentEmails[0].to).toBe('compras@sugestion.com');
+    expect(api.sentEmails[0].htmlBody).toContain('Caja Crítica');
+    expect(api.sentEmails[0].htmlBody).not.toContain('Caja Ya Pedida');
   });
 });

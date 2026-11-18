@@ -68,7 +68,9 @@ export type SheetsAction =
   | 'LOG_ORDER' 
   | 'LOG_MOVEMENT' 
   | 'RECORD_MOVEMENTS' 
-  | 'SETUP_STRUCTURE';
+  | 'SETUP_STRUCTURE'
+  | 'SET_ALERT_CONFIG'
+  | 'TEST_EMAIL_ALERT';
 
 export interface SheetsPayload {
   metadata?: any;
@@ -78,6 +80,11 @@ export interface SheetsPayload {
   movement?: any;
   movements?: any[];
   adminPin?: string;
+  alertConfig?: {
+    alertEmail?: string;
+    triggerLevel?: 'CRITICO_AND_PEDIR' | 'CRITICO_ONLY';
+    muteOrderedItems?: boolean;
+  };
 }
 
 /**

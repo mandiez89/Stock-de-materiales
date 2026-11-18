@@ -12,18 +12,21 @@ import {
   Key, 
   RefreshCw,
   LogOut,
-  Table,
-  Layers,
-  ArrowRight,
   Sparkles,
   FileSpreadsheet,
-  HelpCircle,
-  Clock
+  Bell,
+  BellRing,
+  Mail,
+  Volume2,
+  VolumeX,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { GOOGLE_APPS_SCRIPT_TEMPLATE, exportInventoryToCSV } from '../data/sheetsIntegration';
 import { MaterialItem, MonthlyFactor } from '../types';
 import { callSheets, getSheetsConfig, saveSheetsConfig } from '../services/sheetsSync';
 import { SheetsSyncState } from '../state/useSheetsSync';
+import { StockAlertsHook } from '../services/stockAlerts';
 import confetti from 'canvas-confetti';
 
 interface CloudSyncSettingsModalProps {
@@ -32,9 +35,10 @@ interface CloudSyncSettingsModalProps {
   items: MaterialItem[];
   selectedMonth: MonthlyFactor;
   sync: SheetsSyncState;
+  alerts: StockAlertsHook;
 }
 
-type ModalTab = 'connection' | 'structure' | 'script';
+type ModalTab = 'connection' | 'alerts' | 'structure' | 'script';
 
 export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
   isOpen,
@@ -42,15 +46,21 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
   items,
   selectedMonth,
   sync,
+  alerts,
 }) => {
   const [activeTab, setActiveTab] = useState<ModalTab>('connection');
   const [copiedScript, setCopiedScript] = useState(false);
-  const [showScriptCode, setShowScriptCode] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState(() => getSheetsConfig().webhookUrl);
   const [accessToken, setAccessToken] = useState(() => getSheetsConfig().accessToken);
+  const [showToken, setShowToken] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
   const [initializingStructure, setInitializingStructure] = useState(false);
+
+  // Email alert state
+  const [emailInput, setEmailInput] = useState(() => alerts.settings.alertEmail);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   if (!isOpen) return null;
 
@@ -86,6 +96,10 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
       saveSheetsConfig(config);
       sync.refreshConfig();
       await sync.pull();
+      if (result.details?.alertEmail && !emailInput) {
+        setEmailInput(result.details.alertEmail);
+        alerts.updateSettings({ alertEmail: result.details.alertEmail });
+      }
       setSyncResult({
         success: true,
         message: 'Conexión verificada y guardada correctamente.',
@@ -142,6 +156,125 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
     setSyncResult(null);
   };
 
+  const handleSaveAlertSettingsToSheets = async () => {
+    const cleanEmail = emailInput.trim();
+    alerts.updateSettings({ alertEmail: cleanEmail });
+
+    if (!sync.configured) {
+      setSyncResult({
+        success: true,
+        message: 'Preferencias de alerta guardadas en este dispositivo.',
+        details: 'Conecta Google Sheets en la pestaña "Conexión Webhook" para habilitar también el envío automático de emails.',
+      });
+      return;
+    }
+
+    setSavingEmail(true);
+    setSyncResult(null);
+    const res = await callSheets('SET_ALERT_CONFIG', {
+      alertConfig: {
+        alertEmail: cleanEmail,
+        triggerLevel: alerts.settings.triggerLevel,
+        muteOrderedItems: alerts.settings.muteOrderedItems,
+      },
+    });
+    setSavingEmail(false);
+
+    if (res.success) {
+      setSyncResult({
+        success: true,
+        message: 'Configuración de alertas sincronizada con Google Sheets.',
+        details: cleanEmail
+          ? `Se enviarán avisos automáticos a: ${cleanEmail} cuando un producto caiga a ${
+              alerts.settings.triggerLevel === 'CRITICO_ONLY' ? 'CRÍTICO' : 'CRÍTICO o PEDIR'
+            }.`
+          : 'Alertas por email desactivadas (sin dirección de correo).',
+      });
+    } else {
+      setSyncResult({
+        success: false,
+        message: res.message,
+        details: 'Asegúrate de haber actualizado el código de Apps Script (pestaña "Código Apps Script") en tu planilla.',
+      });
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    const cleanEmail = emailInput.trim();
+    if (!cleanEmail) {
+      setSyncResult({
+        success: false,
+        message: 'Ingresa un correo electrónico válido para enviar la prueba.',
+      });
+      return;
+    }
+    alerts.updateSettings({ alertEmail: cleanEmail });
+
+    if (!sync.configured) {
+      setSyncResult({
+        success: false,
+        message: 'Debes configurar primero la Conexión Webhook con Google Sheets para enviar emails.',
+      });
+      return;
+    }
+
+    setTestingEmail(true);
+    setSyncResult(null);
+    const res = await callSheets('TEST_EMAIL_ALERT', {
+      alertConfig: {
+        alertEmail: cleanEmail,
+        triggerLevel: alerts.settings.triggerLevel,
+        muteOrderedItems: alerts.settings.muteOrderedItems,
+      },
+      items,
+    });
+    setTestingEmail(false);
+
+    if (res.success) {
+      setSyncResult({
+        success: true,
+        message: `Email de prueba enviado a ${cleanEmail}`,
+        details: `Incluye el reporte actual con ${alerts.activeAlerts.length} materiales pendientes de reposición.`,
+      });
+      confetti({ particleCount: 40, spread: 50 });
+    } else {
+      setSyncResult({
+        success: false,
+        message: res.message,
+        details: 'Verifica que hayas pegado la última versión del código Apps Script y autorizado el envío de correos (MailApp) al implementar.',
+      });
+    }
+  };
+
+  const handleTestBrowserPush = async () => {
+    setSyncResult(null);
+    if (alerts.permissionStatus !== 'granted') {
+      const perm = await alerts.requestBrowserPermission();
+      if (perm !== 'granted') {
+        setSyncResult({
+          success: false,
+          message: 'Permiso de notificaciones denegado en el navegador.',
+          details: 'Haz clic en el candado junto a la barra de direcciones del navegador y permite las "Notificaciones".',
+        });
+        return;
+      }
+    } else {
+      const testRes = alerts.sendTestPush();
+      if (testRes.ok) {
+        setSyncResult({
+          success: true,
+          message: 'Notificación Push enviada a tu pantalla.',
+          details: 'Así verás el aviso emergente cuando un insumo entre en estado CRÍTICO o PEDIR.',
+        });
+      } else {
+        setSyncResult({
+          success: false,
+          message: testRes.reason || 'No se pudo mostrar la notificación.',
+        });
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
@@ -153,10 +286,10 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">
-                Sincronización y Estructura de Google Sheets
+                Sincronización en la Nube y Alertas de Stock
               </h3>
               <p className="text-xs text-slate-500">
-                Historial en la hoja <code className="font-mono bg-slate-200 px-1 py-0.2 rounded font-bold text-slate-700">Movimientos</code> y cálculo continuo de stock
+                Conexión con Google Sheets, notificaciones push nativas y alertas por correo
               </p>
             </div>
           </div>
@@ -169,11 +302,14 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="px-6 border-b border-slate-200 bg-white flex items-center gap-2">
+        <div className="px-6 border-b border-slate-200 bg-white flex items-center gap-2 overflow-x-auto">
           <button
             type="button"
-            onClick={() => setActiveTab('connection')}
-            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab('connection');
+              setSyncResult(null);
+            }}
+            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'connection'
                 ? 'border-indigo-600 text-indigo-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -185,21 +321,43 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('structure')}
-            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab('alerts');
+              setSyncResult(null);
+            }}
+            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'alerts'
+                ? 'border-indigo-600 text-indigo-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BellRing className="w-3.5 h-3.5" />
+            <span>Alertas Push y Email</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('structure');
+              setSyncResult(null);
+            }}
+            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'structure'
                 ? 'border-indigo-600 text-indigo-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Estructura de la Planilla (Kardex)</span>
+            <span>Estructura Planilla (Kardex)</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('script')}
-            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab('script');
+              setSyncResult(null);
+            }}
+            className={`py-3 px-3 border-b-2 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'script'
                 ? 'border-indigo-600 text-indigo-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -280,13 +438,23 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Token de Acceso (ACCESS_TOKEN)
                   </label>
-                  <input
-                    type="password"
-                    placeholder="Token configurado en Propiedades del script"
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showToken ? 'text' : 'password'}
+                      placeholder="Token configurado en Propiedades del script"
+                      value={accessToken}
+                      onChange={(e) => setAccessToken(e.target.value)}
+                      className="w-full pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken((prev) => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+                      title={showToken ? 'Ocultar token' : 'Mostrar token para copiar a otra PC'}
+                    >
+                      {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   <span className="text-[10px] text-slate-500 block mt-1">
                     Protege tu planilla para que solo dispositivos autorizados puedan registrar movimientos o consultar existencias.
                   </span>
@@ -330,7 +498,191 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: STRUCTURE & FORMULAS (KARDEX) */}
+          {/* TAB 2: PUSH & EMAIL ALERTS */}
+          {activeTab === 'alerts' && (
+            <div className="space-y-4 text-xs">
+              {/* Channel 1: Native Browser Push Notifications */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">
+                        1. Notificaciones Push Nativas (PC y Celular)
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Muestra una alerta emergente en el sistema cuando un material cae en falta.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {alerts.permissionStatus === 'granted' ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          alerts.updateSettings({
+                            browserNotificationsEnabled: !alerts.settings.browserNotificationsEnabled,
+                          })
+                        }
+                        className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 ${
+                          alerts.settings.browserNotificationsEnabled
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>
+                          {alerts.settings.browserNotificationsEnabled ? 'Push Activo' : 'Push Pausado'}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleTestBrowserPush}
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <BellRing className="w-3.5 h-3.5" />
+                        <span>Activar Notificaciones Push</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleTestBrowserPush}
+                      className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                    >
+                      Probar Push
+                    </button>
+                  </div>
+                </div>
+
+                {/* Alert Rules & Sound Toggles */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200">
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-lg flex flex-col justify-between gap-1.5">
+                    <span className="text-[11px] font-bold text-slate-700">Momento de Disparo</span>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-md">
+                      <button
+                        type="button"
+                        onClick={() => alerts.updateSettings({ triggerLevel: 'CRITICO_AND_PEDIR' })}
+                        className={`flex-1 py-1 px-2 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+                          alerts.settings.triggerLevel === 'CRITICO_AND_PEDIR'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Crítico + Pedir
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => alerts.updateSettings({ triggerLevel: 'CRITICO_ONLY' })}
+                        className={`flex-1 py-1 px-2 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+                          alerts.settings.triggerLevel === 'CRITICO_ONLY'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Solo Crítico
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-700 block">
+                        Silenciar Pedidos Realizados
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        No avisar si ya fue encargado
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alerts.settings.muteOrderedItems}
+                      onChange={(e) => alerts.updateSettings({ muteOrderedItems: e.target.checked })}
+                      className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {alerts.settings.soundEnabled ? (
+                        <Volume2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                      ) : (
+                        <VolumeX className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-700 block">Sonido de Alerta</span>
+                        <span className="text-[10px] text-slate-500">Campana suave en PC/Tablet</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alerts.settings.soundEnabled}
+                      onChange={(e) => alerts.updateSettings({ soundEnabled: e.target.checked })}
+                      className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Channel 2: Automatic Email from Google Sheets */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      2. Email Automático desde Google Sheets
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Tu planilla de Google Sheets envía un correo automático cuando un material entra en falta y no está pedido.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email(s) de Destino para Alertas (separados por coma si son varios)
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="email"
+                      placeholder="ejemplo: compras@empresa.com, deposito@empresa.com"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveAlertSettingsToSheets}
+                      disabled={savingEmail}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      {savingEmail ? 'Guardando...' : 'Guardar Configuración'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendTestEmail}
+                      disabled={testingEmail || !emailInput.trim()}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shrink-0 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{testingEmail ? 'Enviando...' : 'Enviar Email de Prueba'}</span>
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block mt-1.5">
+                    Nota: Si actualizaste recientemente las funciones de alerta, recuerda copiar el código desde la pestaña <strong>Código Apps Script</strong> y pegarlo en tu Google Sheet.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: STRUCTURE & FORMULAS (KARDEX) */}
           {activeTab === 'structure' && (
             <div className="space-y-4 text-xs">
               <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-start justify-between gap-4">
@@ -425,13 +777,13 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: SCRIPT CODE */}
+          {/* TAB 4: SCRIPT CODE */}
           {activeTab === 'script' && (
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
                 <div>
                   <h4 className="font-bold text-slate-800">
-                    Google Apps Script Oficial (Code.gs)
+                    Google Apps Script Oficial (Code.gs) • Incluye Alertas por Email
                   </h4>
                   <p className="text-[11px] text-slate-500">
                     Copia y pega este código en Extensiones &gt; Apps Script de tu planilla.
